@@ -167,7 +167,7 @@ public final class MapView extends FrameLayout {
 
     // Used to select "Improve this map" link in the attribution dialog
     // Index into R.arrays.attribution_links
-    private static final int ATTRIBUTION_INDEX_IMPROVE_THIS_MAP = 2;
+    private static final int ATTRIBUTION_INDEX_IMPROVE_THIS_MAP = 3;
 
     /**
      * The currently supported maximum zoom level.
