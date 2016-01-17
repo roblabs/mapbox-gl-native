@@ -3,12 +3,14 @@
     <array name="attribution_names">
         <item>&#169; Mapbox</item>
         <item>&#169; OpenStreetMap</item>
+        <item>&#169; eπ</item>
         <item>Improve this map</item>
     </array>
     <!-- If editing this array update MapView.ATTRIBUTION_INDEX_IMPROVE_THIS_MAP -->
     <array name="attribution_links" formatted="false" translatable="false">
         <item>https://www.mapbox.com/about/maps/</item>
         <item>http://www.openstreetmap.org/about/</item>
+        <item>http://RobLabs.com/Legal/</item>
         <item>https://www.mapbox.com/map-feedback/#/%1$f/%2$f/%3$d</item>
     </array>
 </resources>
