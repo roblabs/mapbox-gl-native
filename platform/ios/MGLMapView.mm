@@ -1458,7 +1458,7 @@ std::chrono::steady_clock::duration durationInSeconds(float duration)
 {
     if ( ! self.attributionSheet)
     {
-        self.attributionSheet = [[UIActionSheet alloc] initWithTitle:@"Mapbox iOS SDK"
+        self.attributionSheet = [[UIActionSheet alloc] initWithTitle:@"Mapbox iOS SDK v3.0.1"
                                                             delegate:self
                                                    cancelButtonTitle:@"Cancel"
                                               destructiveButtonTitle:nil
