@@ -7,6 +7,15 @@ trigger_map:
 - pattern: "*"
   workflow: primary
 workflows:
+  release:
+    steps:
+    - script:
+        title: gradle assemble
+        inputs:
+        - content: |-
+            #!/bin/bash
+
+            gradle assembleRelease
   primary:
     steps:
     - script:
