@@ -25,7 +25,26 @@ ext {
     supportLibVersion = '23.1.1'
 }
 
+// Load file keystore.properties
+// # example keystore.properties
+// storeFile=/path/to/javaKeyStore.jks
+// storePassword=
+// keyAlias=
+// keyPassword=
+
+def keystorePropertiesFile = rootProject.file("keystore.properties");
+def keystoreProperties = new Properties()
+keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+
 android {
+    signingConfigs {
+        epiRational {
+            storeFile file(keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+        }
+    }
     compileSdkVersion 23
     buildToolsVersion "23.0.2"
 
@@ -62,6 +81,8 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            zipAlignEnabled true
+            signingConfig signingConfigs.epiRational
         }
     }
 }
