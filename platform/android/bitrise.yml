@@ -24,19 +24,24 @@ workflows:
                 envman add --key SKIPCI --value false
             fi
     - script:
-        title: Install Linux Dependencies
+        title: Install OS X Dependencies
         inputs:
         - content: |-
             #!/bin/bash
 
-            apt-get install -y pkg-config
+            brew install pkg-config
     - script:
         title: Build Android SDK For arm
         inputs:
         - content: |-
             #!/bin/bash
 
+            cd ../..
+            pwd
             make android -j4
+            gradle assembleRelease
+            # aapt dump badging ./MapboxGLAndroidSDKTestApp/build/outputs/apk/MapboxGLAndroidSDKTestApp-release.apk | grep package
+
         - is_debug: 'yes'
     - script:
         title: Run Unit Tests
@@ -45,6 +50,7 @@ workflows:
             #!/bin/bash
 
             cd platform/android
+            pwd
             ./gradlew testReleaseUnitTest --continue
         - is_debug: 'yes'
     - slack:
