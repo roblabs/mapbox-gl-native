@@ -1531,13 +1531,14 @@ mbgl::Duration MGLDurationInSeconds(NSTimeInterval duration)
 {
     if ( ! self.attributionSheet)
     {
-        self.attributionSheet = [[UIActionSheet alloc] initWithTitle:@"Mapbox iOS SDK"
+        self.attributionSheet = [[UIActionSheet alloc] initWithTitle:@"Mapbox iOS SDK v3.1.1"
                                                             delegate:self
                                                    cancelButtonTitle:@"Cancel"
                                               destructiveButtonTitle:nil
                                                    otherButtonTitles:
                                  @"© Mapbox",
                                  @"© OpenStreetMap",
+                                 @"© eπ",
                                  @"Improve This Map",
                                  @"Mapbox Telemetry",
                                  nil];
@@ -1561,12 +1562,17 @@ mbgl::Duration MGLDurationInSeconds(NSTimeInterval duration)
     }
     else if (buttonIndex == actionSheet.firstOtherButtonIndex + 2)
     {
+        [[UIApplication sharedApplication] openURL:
+         [NSURL URLWithString:@"http://RobLabs.com/Legal/"]]; // (c) 2016 ePi Rational, Inc.  eπ  or  𝑒Π.
+    }
+    else if (buttonIndex == actionSheet.firstOtherButtonIndex + 3)
+    {
         NSString *feedbackURL = [NSString stringWithFormat:@"https://www.mapbox.com/map-feedback/#/%.5f/%.5f/%i",
                                  self.longitude, self.latitude, (int)round(self.zoomLevel)];
         [[UIApplication sharedApplication] openURL:
          [NSURL URLWithString:feedbackURL]];
     }
-    else if (buttonIndex == actionSheet.firstOtherButtonIndex + 3)
+    else if (buttonIndex == actionSheet.firstOtherButtonIndex + 4)
     {
         NSString *message;
         NSString *participate;
