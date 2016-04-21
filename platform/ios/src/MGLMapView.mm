@@ -1531,7 +1531,7 @@ mbgl::Duration MGLDurationInSeconds(NSTimeInterval duration)
 {
     if ( ! self.attributionSheet)
     {
-        self.attributionSheet = [[UIActionSheet alloc] initWithTitle:@"Mapbox iOS SDK 3.2.0"
+        self.attributionSheet = [[UIActionSheet alloc] initWithTitle:@"Mapbox iOS SDK 3.2.1"
                                                             delegate:self
                                                    cancelButtonTitle:@"Cancel"
                                               destructiveButtonTitle:nil
