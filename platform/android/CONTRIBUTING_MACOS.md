@@ -58,6 +58,12 @@ Run:
     // Can be run on most Android phones and arm emulator
     make android
     
+
+    # other options if you have issues with any of the tool chain
+    make clean
+    make distclean
+    make android -j4
+
     // Make x86 version of Core GL
     // Useful for running faster Anroid x86 emulator on Macs
     make android-lib-x86
