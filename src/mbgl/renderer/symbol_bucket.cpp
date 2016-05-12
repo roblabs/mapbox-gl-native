@@ -151,6 +151,76 @@ void SymbolBucket::parseFeatures(const GeometryTileLayer& layer, const Filter& f
                 u8string = platform::lowercase(u8string);
             }
 
+            if (boost::ends_with(u8string, " m"))  { // look for " m" since the Mapbox styles use that convention
+                
+
+                // TODO - change to meters or feet, depending on a locale setting
+                // The Mapbox styles define elevation in the text-field of the symbol as
+                //    "{ele} m"
+                //
+                // * split up the data coming from '{ele} m' as meters and units
+                // * convert meters to feet (3.281 feet per meter)
+                // * set precsion to "tens" or to two places to the left of the decimal point
+
+                /*  // sample entry for 'contour-label' from the Mapbox Outdoors style
+                 
+                 {
+                     "id": "contour-label",
+                     "type": "symbol",
+                     "source-layer": "contour",
+                     "minzoom": 11,
+                     
+                     "layout": {
+                       "text-field": "{ele} m"
+                 }
+                 
+                 */
+                
+                
+                // * split up the data coming from '{ele} m' as meters and units
+                int meters;
+                std::string units;
+                
+                std::stringstream   data(u8string);
+                data >> meters >> units;
+                
+                // * convert meters to feet (3.281 feet per meter)
+                double feet = 3.281 * meters;
+                
+                // * set precsion to "tens" or to two places to the left of the decimal point
+                /*  example casting to "tens"
+                 
+                 m      feet      feet with precision to tens
+                 ---    ---       ---
+                 150	492.15	  490
+                 200	656.2	  650
+                 250	820.25	  820
+                 300	984.3	  980
+                 350	1148.35	  1140
+                 500	1640.5	  1640
+                 
+                 * Typical US Geological Service topo maps are in 40 foot intervals
+                 * Mapbox elevations from the Outdoors style (terrain-V2) are in 50 meters intervals
+                 * Ideally, our team would like to draw the topo lines as 40 feet intervals
+                 * But we don't know if the contour data comes in feet, or only as meters.
+                 * empircally, we computed 0-3 meters of lost precision in the field.
+                 * Not bad, considering that the mapbox 'contour-line' objects are in 50 meter intervals
+                 
+                 */
+
+                int feetAsInt = (int) (floor(feet / 10.0) * 10.0);
+                char str_tmp[10];
+                sprintf(str_tmp, "%d", feetAsInt);
+                
+                std::vector<std::string> list;
+                list.push_back(u8string);
+                list.push_back(" -  ");
+                list.push_back(str_tmp);
+                list.push_back(" ft");
+                
+                // replace original with new string
+                u8string = boost::algorithm::join(list, "");
+            }
             ft.label = util::utf8_to_utf32::convert(u8string);
 
             if (!ft.label.empty()) {
