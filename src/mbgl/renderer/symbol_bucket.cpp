@@ -153,6 +153,74 @@ void SymbolBucket::parseFeatures(const GeometryTileLayer& layer, const Filter& f
                 u8string = platform::lowercase(u8string);
             }
 
+            if (boost::ends_with(u8string, " m"))  { // look for " m" since the Mapbox styles use that convention
+                
+
+                // TODO - change to meters or feet, depending on a locale setting
+                // The Mapbox styles define elevation in the text-field of the symbol as
+                //    "{ele} m"
+                //
+                // for Peaks treat the incoming symbol as
+                //    "Mt Whitney, {ele} m"
+                //
+                // * split up the data
+                // * convert meters to feet (3.281 feet per meter)
+                // * set precsion to "tens" or to two places to the left of the decimal point
+                
+                std::string name;
+                int meters;
+                std::string units;
+                
+                std::vector<std::string> strConvertedData;
+                
+                std::vector<std::string> strSplitU8string;
+                boost::split(strSplitU8string, u8string, boost::is_any_of(","));
+                
+                if (strSplitU8string.size() > 1) {
+                // Parse a string like "Mt Whitney, {ele} m"  as name, meters, units
+                    
+                    std::stringstream   strMetersUnits(strSplitU8string[1]);
+                    
+                    strMetersUnits >> meters >> units;
+                    
+                    // * convert meters to feet (3.281 feet per meter)
+                    double feet = 3.281 * meters;
+                    
+                    int feetAsInt = (int) (feet);
+                    char str_tmp[10];
+                    sprintf(str_tmp, "%d", feetAsInt);
+                    
+                    strConvertedData.push_back(strSplitU8string[0]);
+                    strConvertedData.push_back(", ");
+                    strConvertedData.push_back(str_tmp);
+                    strConvertedData.push_back(" ft");
+                    
+                } else {
+                    // Parse a string like "{ele} m" as meters, units
+
+                    std::stringstream   strMetersUnits(strSplitU8string[0]);
+
+                    strMetersUnits >> meters >> units;
+                    
+                    // * convert meters to feet (3.281 feet per meter)
+                    double feet = 3.281 * meters;
+                    
+                    // * set precsion to "tens" or to two places to the left of the decimal point
+                    int feetAsInt = (int) (floor(feet / 10.0) * 10.0);
+                    char str_tmp[10];
+                    sprintf(str_tmp, "%d", feetAsInt);
+                    
+                    
+//                    strConvertedData.push_back(u8string);  // original data in meters  TODO - switch on local
+//                    strConvertedData.push_back(" -  ");
+                    strConvertedData.push_back(str_tmp);
+                    strConvertedData.push_back(" ft");
+                }
+                
+                // replace original with new string
+                u8string = boost::algorithm::join(strConvertedData, "");
+
+            }
             ft.label = util::utf8_to_utf32::convert(u8string);
 
             if (!ft.label.empty()) {
