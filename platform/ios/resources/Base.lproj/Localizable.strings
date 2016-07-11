@@ -25,6 +25,9 @@
 /* Copyright notice in attribution sheet */
 "COPY_OSM" = "© OpenStreetMap";
 
+/* Copyright notice in attribution sheet */
+"COPY_EPI" = "© eπ";
+
 /* Instructions in Interface Builder designable; {key}, {plist file name} */
 "DESIGNABLE" = "To display a Mapbox-hosted map here, set %1$@ to your access token in %2$@\n\nFor detailed instructions, see:";
 
@@ -50,7 +53,7 @@
 "MAP_FEEDBACK" = "Improve This Map";
 
 /* Action sheet title */
-"SDK_NAME" = "Mapbox iOS SDK";
+"SDK_NAME" = "Mapbox iOS SDK 3.3.0";
 
 /* Telemetry prompt message */
 "TELEMETRY_DISABLED_MSG" = "You can help make OpenStreetMap and Mapbox maps better by contributing anonymous usage data.";

@@ -1646,6 +1646,7 @@ mbgl::Duration MGLDurationInSeconds(NSTimeInterval duration)
                                                    otherButtonTitles:
                                  NSLocalizedStringWithDefaultValue(@"COPY_MAPBOX", nil, nil, @"© Mapbox", @"Copyright notice in attribution sheet"),
                                  NSLocalizedStringWithDefaultValue(@"COPY_OSM", nil, nil, @"© OpenStreetMap", @"Copyright notice in attribution sheet"),
+                                 NSLocalizedStringWithDefaultValue(@"COPY_EPI", nil, nil, @"© eπ", @"Copyright notice in attribution sheet"),
                                  NSLocalizedStringWithDefaultValue(@"MAP_FEEDBACK", nil, nil, @"Improve This Map", @"Action in attribution sheet"),
                                  NSLocalizedStringWithDefaultValue(@"TELEMETRY_NAME", nil, nil, @"Mapbox Telemetry", @"Action in attribution sheet"),
                                  nil];
@@ -1669,12 +1670,17 @@ mbgl::Duration MGLDurationInSeconds(NSTimeInterval duration)
     }
     else if (buttonIndex == actionSheet.firstOtherButtonIndex + 2)
     {
+        [[UIApplication sharedApplication] openURL:
+         [NSURL URLWithString:@"http://RobLabs.com/Legal/"]]; // (c) 2016 ePi Rational, Inc.  eπ  or  𝑒Π.
+    }
+    else if (buttonIndex == actionSheet.firstOtherButtonIndex + 3)
+    {
         NSString *feedbackURL = [NSString stringWithFormat:@"https://www.mapbox.com/map-feedback/#/%.5f/%.5f/%i",
                                  self.longitude, self.latitude, (int)round(self.zoomLevel + 1)];
         [[UIApplication sharedApplication] openURL:
          [NSURL URLWithString:feedbackURL]];
     }
-    else if (buttonIndex == actionSheet.firstOtherButtonIndex + 3)
+    else if (buttonIndex == actionSheet.firstOtherButtonIndex + 4)
     {
         NSString *message;
         NSString *participate;
