@@ -2,7 +2,7 @@
 <resources>
     <string name="compassContentDescription">Map compass. Click to reset the map rotation to North.</string>
     <string name="attributionsIconContentDescription">Attribution icon. Click to show attribution dialog.</string>
-    <string name="attributionsDialogTitle">Mapbox Android SDK 4.0.0</string>
+    <string name="attributionsDialogTitle">Mapbox Android SDK 4.1.1</string>
     <string name="attributionTelemetryTitle">Make Mapbox Maps Better</string>
     <string name="attributionTelemetryMessage">You are helping to make OpenStreetMap and Mapbox maps better by contributing anonymous usage data.</string>
     <string name="mapboxIconContentDescription">The Mapbox logo.</string>
