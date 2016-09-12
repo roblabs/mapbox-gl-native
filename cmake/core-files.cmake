@@ -229,6 +229,7 @@ set(MBGL_CORE_FILES
     src/mbgl/style/layer.cpp
     src/mbgl/style/layer_impl.cpp
     src/mbgl/style/layer_impl.hpp
+    src/mbgl/style/layer_observer.hpp
     src/mbgl/style/layout_property.hpp
     src/mbgl/style/observer.hpp
     src/mbgl/style/paint_property.hpp
@@ -399,6 +400,7 @@ set(MBGL_CORE_FILES
     include/mbgl/util/variant.hpp
     include/mbgl/util/work_request.hpp
     include/mbgl/util/work_task.hpp
+    include/mbgl/util/work_task_impl.hpp
     src/mbgl/util/async_task.hpp
     src/mbgl/util/chrono.cpp
     src/mbgl/util/clip_id.cpp
@@ -438,7 +440,6 @@ set(MBGL_CORE_FILES
     src/mbgl/util/merge_lines.hpp
     src/mbgl/util/premultiply.cpp
     src/mbgl/util/premultiply.hpp
-    src/mbgl/util/ptr.hpp
     src/mbgl/util/rapidjson.hpp
     src/mbgl/util/raster.cpp
     src/mbgl/util/raster.hpp

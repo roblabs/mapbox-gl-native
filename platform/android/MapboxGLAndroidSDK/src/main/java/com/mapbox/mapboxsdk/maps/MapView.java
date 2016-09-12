@@ -556,8 +556,10 @@ public class MapView extends FrameLayout {
     @UiThread
     public void onPause() {
         // Register for connectivity changes
-        getContext().unregisterReceiver(mConnectivityReceiver);
-        mConnectivityReceiver = null;
+        if (mConnectivityReceiver != null) {
+            getContext().unregisterReceiver(mConnectivityReceiver);
+            mConnectivityReceiver = null;
+        }
 
         mMyLocationView.onPause();
     }
@@ -832,6 +834,12 @@ public class MapView extends FrameLayout {
         if (mDestroyed) {
             return;
         }
+
+        // stopgap for https://github.com/mapbox/mapbox-gl-native/issues/6242
+        if (TextUtils.isEmpty(mNativeMapView.getAccessToken())) {
+            setAccessToken(MapboxAccountManager.getInstance().getAccessToken());
+        }
+
         mStyleUrl = url;
         mNativeMapView.setStyleUrl(url);
     }

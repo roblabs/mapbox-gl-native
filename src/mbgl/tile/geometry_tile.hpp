@@ -31,12 +31,13 @@ public:
     ~GeometryTile() override;
 
     void setError(std::exception_ptr err);
-    void setData(std::unique_ptr<GeometryTileData>);
+    void setData(std::unique_ptr<const GeometryTileData>);
 
     Bucket* getBucket(const style::Layer&) override;
 
     bool parsePending() override;
 
+    void redoLayout() override;
     void redoPlacement(PlacementConfig) override;
 
     void queryRenderedFeatures(
@@ -50,6 +51,8 @@ public:
 private:
     std::vector<std::unique_ptr<style::Layer>> cloneStyleLayers() const;
     void redoPlacement();
+
+    void tileLoaded(TileParseResult, PlacementConfig);
 
     const std::string sourceID;
     style::Style& style;

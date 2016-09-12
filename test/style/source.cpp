@@ -38,7 +38,6 @@ public:
     style::UpdateParameters updateParameters {
         1.0,
         MapDebugOptions(),
-        TimePoint(),
         transformState,
         worker,
         fileSource,
@@ -87,7 +86,7 @@ TEST(Source, LoadingFail) {
 
     VectorSource source("source", "url");
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
+    source.baseImpl->loadDescription(test.fileSource);
 
     test.run();
 }
@@ -110,7 +109,7 @@ TEST(Source, LoadingCorrupt) {
 
     VectorSource source("source", "url");
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
+    source.baseImpl->loadDescription(test.fileSource);
 
     test.run();
 }
@@ -124,7 +123,7 @@ TEST(Source, RasterTileEmpty) {
         return response;
     };
 
-    test.observer.tileLoaded = [&] (Source& source, const OverscaledTileID&, bool) {
+    test.observer.tileLoaded = [&] (Source& source, const OverscaledTileID&, TileLoadState) {
         EXPECT_EQ("source", source.getID());
         test.end();
     };
@@ -138,8 +137,8 @@ TEST(Source, RasterTileEmpty) {
 
     RasterSource source("source", tileset, 512);
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
-    source.baseImpl->update(test.updateParameters);
+    source.baseImpl->loadDescription(test.fileSource);
+    source.baseImpl->loadTiles(test.updateParameters);
 
     test.run();
 }
@@ -153,7 +152,7 @@ TEST(Source, VectorTileEmpty) {
         return response;
     };
 
-    test.observer.tileLoaded = [&] (Source& source, const OverscaledTileID&, bool) {
+    test.observer.tileLoaded = [&] (Source& source, const OverscaledTileID&, TileLoadState) {
         EXPECT_EQ("source", source.getID());
         test.end();
     };
@@ -167,8 +166,8 @@ TEST(Source, VectorTileEmpty) {
 
     VectorSource source("source", tileset);
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
-    source.baseImpl->update(test.updateParameters);
+    source.baseImpl->loadDescription(test.fileSource);
+    source.baseImpl->loadTiles(test.updateParameters);
 
     test.run();
 }
@@ -196,8 +195,8 @@ TEST(Source, RasterTileFail) {
 
     RasterSource source("source", tileset, 512);
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
-    source.baseImpl->update(test.updateParameters);
+    source.baseImpl->loadDescription(test.fileSource);
+    source.baseImpl->loadTiles(test.updateParameters);
 
     test.run();
 }
@@ -225,8 +224,8 @@ TEST(Source, VectorTileFail) {
 
     VectorSource source("source", tileset);
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
-    source.baseImpl->update(test.updateParameters);
+    source.baseImpl->loadDescription(test.fileSource);
+    source.baseImpl->loadTiles(test.updateParameters);
 
     test.run();
 }
@@ -253,8 +252,8 @@ TEST(Source, RasterTileCorrupt) {
 
     RasterSource source("source", tileset, 512);
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
-    source.baseImpl->update(test.updateParameters);
+    source.baseImpl->loadDescription(test.fileSource);
+    source.baseImpl->loadTiles(test.updateParameters);
 
     test.run();
 }
@@ -285,8 +284,8 @@ TEST(Source, VectorTileCorrupt) {
 
     VectorSource source("source", tileset);
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
-    source.baseImpl->update(test.updateParameters);
+    source.baseImpl->loadDescription(test.fileSource);
+    source.baseImpl->loadTiles(test.updateParameters);
 
     test.run();
 }
@@ -299,7 +298,7 @@ TEST(Source, RasterTileCancel) {
         return optional<Response>();
     };
 
-    test.observer.tileLoaded = [&] (Source&, const OverscaledTileID&, bool) {
+    test.observer.tileLoaded = [&] (Source&, const OverscaledTileID&, TileLoadState) {
         FAIL() << "Should never be called";
     };
 
@@ -312,8 +311,8 @@ TEST(Source, RasterTileCancel) {
 
     RasterSource source("source", tileset, 512);
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
-    source.baseImpl->update(test.updateParameters);
+    source.baseImpl->loadDescription(test.fileSource);
+    source.baseImpl->loadTiles(test.updateParameters);
 
     test.run();
 }
@@ -326,7 +325,7 @@ TEST(Source, VectorTileCancel) {
         return optional<Response>();
     };
 
-    test.observer.tileLoaded = [&] (Source&, const OverscaledTileID&, bool) {
+    test.observer.tileLoaded = [&] (Source&, const OverscaledTileID&, TileLoadState) {
         FAIL() << "Should never be called";
     };
 
@@ -339,8 +338,8 @@ TEST(Source, VectorTileCancel) {
 
     VectorSource source("source", tileset);
     source.baseImpl->setObserver(&test.observer);
-    source.baseImpl->load(test.fileSource);
-    source.baseImpl->update(test.updateParameters);
+    source.baseImpl->loadDescription(test.fileSource);
+    source.baseImpl->loadTiles(test.updateParameters);
 
     test.run();
 }

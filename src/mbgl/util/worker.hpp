@@ -41,13 +41,18 @@ public:
 
     Request parseGeometryTile(TileWorker&,
                               std::vector<std::unique_ptr<style::Layer>>,
-                              std::unique_ptr<GeometryTileData>,
+                              std::unique_ptr<const GeometryTileData>,
                               PlacementConfig,
                               std::function<void(TileParseResult)> callback);
 
     Request parsePendingGeometryTileLayers(TileWorker&,
                                            PlacementConfig config,
                                            std::function<void(TileParseResult)> callback);
+
+    Request redoLayout(TileWorker&,
+                       std::vector<std::unique_ptr<style::Layer>>,
+                       PlacementConfig,
+                       std::function<void(TileParseResult)> callback);
 
     Request redoPlacement(TileWorker&,
                           const std::unordered_map<std::string, std::unique_ptr<Bucket>>&,

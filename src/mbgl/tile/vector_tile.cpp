@@ -14,8 +14,7 @@ namespace mbgl {
 
 class VectorTileLayer;
 
-using pbf_iter_type = protozero::pbf_reader::const_uint32_iterator;
-using packed_iter_type = std::pair<pbf_iter_type,pbf_iter_type>;
+using packed_iter_type = protozero::iterator_range<protozero::pbf_reader::const_uint32_iterator>;
 
 class VectorTileFeature : public GeometryTileFeature {
 public:
@@ -40,7 +39,7 @@ public:
     VectorTileLayer(protozero::pbf_reader);
 
     std::size_t featureCount() const override { return features.size(); }
-    util::ptr<const GeometryTileFeature> getFeature(std::size_t) const override;
+    std::unique_ptr<GeometryTileFeature> getFeature(std::size_t) const override;
     std::string getName() const override;
 
 private:
@@ -60,12 +59,16 @@ class VectorTileData : public GeometryTileData {
 public:
     VectorTileData(std::shared_ptr<const std::string> data);
 
-    util::ptr<GeometryTileLayer> getLayer(const std::string&) const override;
+    std::unique_ptr<GeometryTileData> clone() const override {
+        return std::make_unique<VectorTileData>(*this);
+    }
+
+    const GeometryTileLayer* getLayer(const std::string&) const override;
 
 private:
     std::shared_ptr<const std::string> data;
     mutable bool parsed = false;
-    mutable std::map<std::string, util::ptr<GeometryTileLayer>> layers;
+    mutable std::map<std::string, VectorTileLayer> layers;
 };
 
 VectorTile::VectorTile(const OverscaledTileID& id_,
@@ -144,8 +147,8 @@ optional<Value> VectorTileFeature::getValue(const std::string& key) const {
         return optional<Value>();
     }
 
-    auto start_itr = tags_iter.first;
-    const auto & end_itr = tags_iter.second;
+    auto start_itr = tags_iter.begin();
+    const auto & end_itr = tags_iter.end();
     while (start_itr != end_itr) {
         uint32_t tag_key = static_cast<uint32_t>(*start_itr++);
 
@@ -172,8 +175,8 @@ optional<Value> VectorTileFeature::getValue(const std::string& key) const {
 
 std::unordered_map<std::string,Value> VectorTileFeature::getProperties() const {
     std::unordered_map<std::string,Value> properties;
-    auto start_itr = tags_iter.first;
-    const auto & end_itr = tags_iter.second;
+    auto start_itr = tags_iter.begin();
+    const auto & end_itr = tags_iter.end();
     while (start_itr != end_itr) {
         uint32_t tag_key = static_cast<uint32_t>(*start_itr++);
         if (start_itr == end_itr) {
@@ -201,10 +204,10 @@ GeometryCollection VectorTileFeature::getGeometries() const {
     lines.emplace_back();
     GeometryCoordinates* line = &lines.back();
 
-    auto g_itr = geometry_iter;
-    while (g_itr.first != g_itr.second) {
+    auto g_itr = geometry_iter.begin();
+    while (g_itr != geometry_iter.end()) {
         if (length == 0) {
-            uint32_t cmd_length = static_cast<uint32_t>(*g_itr.first++);
+            uint32_t cmd_length = static_cast<uint32_t>(*g_itr++);
             cmd = cmd_length & 0x7;
             length = cmd_length >> 3;
         }
@@ -212,8 +215,8 @@ GeometryCollection VectorTileFeature::getGeometries() const {
         --length;
 
         if (cmd == 1 || cmd == 2) {
-            x += protozero::decode_zigzag32(static_cast<uint32_t>(*g_itr.first++));
-            y += protozero::decode_zigzag32(static_cast<uint32_t>(*g_itr.first++));
+            x += protozero::decode_zigzag32(static_cast<uint32_t>(*g_itr++));
+            y += protozero::decode_zigzag32(static_cast<uint32_t>(*g_itr++));
 
             if (cmd == 1 && !line->empty()) { // moveTo
                 lines.emplace_back();
@@ -243,21 +246,20 @@ VectorTileData::VectorTileData(std::shared_ptr<const std::string> data_)
     : data(std::move(data_)) {
 }
 
-util::ptr<GeometryTileLayer> VectorTileData::getLayer(const std::string& name) const {
+const GeometryTileLayer* VectorTileData::getLayer(const std::string& name) const {
     if (!parsed) {
         parsed = true;
         protozero::pbf_reader tile_pbf(*data);
         while (tile_pbf.next(3)) {
-            util::ptr<VectorTileLayer> layer = std::make_shared<VectorTileLayer>(tile_pbf.get_message());
-            layers.emplace(layer->name, layer);
+            VectorTileLayer layer(tile_pbf.get_message());
+            layers.emplace(layer.name, std::move(layer));
         }
     }
 
-    auto layer_it = layers.find(name);
-    if (layer_it != layers.end()) {
-        return layer_it->second;
+    auto it = layers.find(name);
+    if (it != layers.end()) {
+        return &it->second;
     }
-
     return nullptr;
 }
 
@@ -292,8 +294,8 @@ VectorTileLayer::VectorTileLayer(protozero::pbf_reader layer_pbf) {
     }
 }
 
-util::ptr<const GeometryTileFeature> VectorTileLayer::getFeature(std::size_t i) const {
-    return std::make_shared<VectorTileFeature>(features.at(i), *this);
+std::unique_ptr<GeometryTileFeature> VectorTileLayer::getFeature(std::size_t i) const {
+    return std::make_unique<VectorTileFeature>(features.at(i), *this);
 }
 
 std::string VectorTileLayer::getName() const {

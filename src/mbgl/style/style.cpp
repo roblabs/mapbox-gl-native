@@ -7,6 +7,10 @@
 #include <mbgl/style/layers/custom_layer_impl.hpp>
 #include <mbgl/style/layers/background_layer.hpp>
 #include <mbgl/style/layers/background_layer_impl.hpp>
+#include <mbgl/style/layers/fill_layer.hpp>
+#include <mbgl/style/layers/line_layer.hpp>
+#include <mbgl/style/layers/circle_layer.hpp>
+#include <mbgl/style/layers/raster_layer.hpp>
 #include <mbgl/style/layer_impl.hpp>
 #include <mbgl/style/parser.hpp>
 #include <mbgl/style/transition_options.hpp>
@@ -88,6 +92,7 @@ void Style::setJSON(const std::string& json) {
     sources.clear();
     layers.clear();
     classes.clear();
+    updateBatch = {};
 
     Parser parser;
     auto error = parser.parse(json);
@@ -129,9 +134,13 @@ void Style::removeSource(const std::string& id) {
     auto it = std::find_if(sources.begin(), sources.end(), [&](const auto& source) {
         return source->getID() == id;
     });
-    if (it == sources.end())
+
+    if (it == sources.end()) {
         throw std::runtime_error("no such source");
+    }
+
     sources.erase(it);
+    updateBatch.sourceIDs.erase(id);
 }
 
 std::vector<const Layer*> Style::getLayers() const {
@@ -154,7 +163,7 @@ Layer* Style::getLayer(const std::string& id) const {
     return it != layers.end() ? it->get() : nullptr;
 }
 
-void Style::addLayer(std::unique_ptr<Layer> layer, optional<std::string> before) {
+Layer* Style::addLayer(std::unique_ptr<Layer> layer, optional<std::string> before) {
     // TODO: verify source
 
     if (SymbolLayer* symbolLayer = layer->as<SymbolLayer>()) {
@@ -167,7 +176,9 @@ void Style::addLayer(std::unique_ptr<Layer> layer, optional<std::string> before)
         customLayer->impl->initialize();
     }
 
-    layers.emplace(before ? findLayer(*before) : layers.end(), std::move(layer));
+    layer->baseImpl->setObserver(this);
+
+    return layers.emplace(before ? findLayer(*before) : layers.end(), std::move(layer))->get();
 }
 
 void Style::removeLayer(const std::string& id) {
@@ -197,11 +208,12 @@ double Style::getDefaultPitch() const {
     return defaultPitch;
 }
 
-void Style::update(const UpdateParameters& parameters) {
+void Style::updateTiles(const UpdateParameters& parameters) {
     bool allTilesUpdated = true;
 
     for (const auto& source : sources) {
-        if (!source->baseImpl->update(parameters)) {
+        source->baseImpl->loadTiles(parameters);
+        if (!source->baseImpl->parseTiles(parameters)) {
             allTilesUpdated = false;
         }
     }
@@ -211,6 +223,15 @@ void Style::update(const UpdateParameters& parameters) {
     if (allTilesUpdated) {
         shouldReparsePartialTiles = false;
     }
+}
+
+void Style::relayout() {
+    for (const auto& sourceID : updateBatch.sourceIDs) {
+        Source* source = getSource(sourceID);
+        if (!source) continue;
+        source->baseImpl->reload();
+    }
+    updateBatch.sourceIDs.clear();
 }
 
 void Style::cascade(const TimePoint& timePoint, MapMode mode) {
@@ -260,7 +281,7 @@ void Style::recalculate(float z, const TimePoint& timePoint, MapMode mode) {
         if (source && layer->baseImpl->needsRendering(z)) {
             source->baseImpl->enabled = true;
             if (!source->baseImpl->loaded) {
-                source->baseImpl->load(fileSource);
+                source->baseImpl->loadDescription(fileSource);
             }
         }
     }
@@ -284,7 +305,9 @@ bool Style::isLoaded() const {
     }
 
     for (const auto& source: sources) {
-        if (source->baseImpl->enabled && !source->baseImpl->isLoaded()) return false;
+        if (source->baseImpl->enabled && !source->baseImpl->isLoaded()) {
+            return false;
+        }
     }
 
     if (!spriteStore->isLoaded()) {
@@ -422,7 +445,7 @@ void Style::setObserver(style::Observer* observer_) {
 void Style::onGlyphsLoaded(const FontStack& fontStack, const GlyphRange& glyphRange) {
     shouldReparsePartialTiles = true;
     observer->onGlyphsLoaded(fontStack, glyphRange);
-    observer->onNeedsRepaint();
+    observer->onUpdate(Update::Repaint);
 }
 
 void Style::onGlyphsError(const FontStack& fontStack, const GlyphRange& glyphRange, std::exception_ptr error) {
@@ -435,7 +458,7 @@ void Style::onGlyphsError(const FontStack& fontStack, const GlyphRange& glyphRan
 
 void Style::onSourceLoaded(Source& source) {
     observer->onSourceLoaded(source);
-    observer->onNeedsRepaint();
+    observer->onUpdate(Update::Repaint);
 }
 
 void Style::onSourceError(Source& source, std::exception_ptr error) {
@@ -446,13 +469,13 @@ void Style::onSourceError(Source& source, std::exception_ptr error) {
     observer->onResourceError(error);
 }
 
-void Style::onTileLoaded(Source& source, const OverscaledTileID& tileID, bool isNewTile) {
-    if (isNewTile) {
+void Style::onTileLoaded(Source& source, const OverscaledTileID& tileID, TileLoadState loadState) {
+    if (loadState == TileLoadState::First) {
         shouldReparsePartialTiles = true;
     }
 
-    observer->onTileLoaded(source, tileID, isNewTile);
-    observer->onNeedsRepaint();
+    observer->onTileLoaded(source, tileID, loadState);
+    observer->onUpdate(Update::Repaint);
 }
 
 void Style::onTileError(Source& source, const OverscaledTileID& tileID, std::exception_ptr error) {
@@ -463,14 +486,14 @@ void Style::onTileError(Source& source, const OverscaledTileID& tileID, std::exc
     observer->onResourceError(error);
 }
 
-void Style::onNeedsRepaint() {
-    observer->onNeedsRepaint();
+void Style::onTileUpdated(Source&, const OverscaledTileID&) {
+    observer->onUpdate(Update::Repaint);
 }
 
 void Style::onSpriteLoaded() {
     shouldReparsePartialTiles = true;
     observer->onSpriteLoaded();
-    observer->onNeedsRepaint();
+    observer->onUpdate(Update::Repaint);
 }
 
 void Style::onSpriteError(std::exception_ptr error) {
@@ -478,6 +501,40 @@ void Style::onSpriteError(std::exception_ptr error) {
     Log::Error(Event::Style, "Failed to load sprite: %s", util::toString(error).c_str());
     observer->onSpriteError(error);
     observer->onResourceError(error);
+}
+
+struct QueueSourceReloadVisitor {
+    UpdateBatch& updateBatch;
+
+    // No need to reload sources for these types; their visibility can change but
+    // they don't participate in layout.
+    void operator()(CustomLayer&) {}
+    void operator()(RasterLayer&) {}
+    void operator()(BackgroundLayer&) {}
+
+    template <class VectorLayer>
+    void operator()(VectorLayer& layer) {
+        updateBatch.sourceIDs.insert(layer.getSourceID());
+    }
+};
+
+void Style::onLayerFilterChanged(Layer& layer) {
+    layer.accept(QueueSourceReloadVisitor { updateBatch });
+    observer->onUpdate(Update::Layout);
+}
+
+void Style::onLayerVisibilityChanged(Layer& layer) {
+    layer.accept(QueueSourceReloadVisitor { updateBatch });
+    observer->onUpdate(Update::Layout);
+}
+
+void Style::onLayerPaintPropertyChanged(Layer&) {
+    observer->onUpdate(Update::RecalculateStyle | Update::Classes);
+}
+
+void Style::onLayerLayoutPropertyChanged(Layer& layer) {
+    layer.accept(QueueSourceReloadVisitor { updateBatch });
+    observer->onUpdate(Update::Layout);
 }
 
 void Style::dumpDebugLogs() const {

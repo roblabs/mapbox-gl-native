@@ -37,7 +37,7 @@ class Map::Impl : public style::Observer {
 public:
     Impl(View&, FileSource&, MapMode, GLContextMode, ConstrainMode, ViewportMode);
 
-    void onNeedsRepaint() override;
+    void onUpdate(Update) override;
     void onStyleError() override;
     void onResourceError(std::exception_ptr) override;
 
@@ -149,12 +149,7 @@ void Map::renderStill(StillImageCallback callback) {
 }
 
 void Map::update(Update flags) {
-    if (flags & Update::Dimensions) {
-        impl->transform.resize(impl->view.getSize());
-    }
-
-    impl->updateFlags |= flags;
-    impl->asyncUpdate.send();
+    impl->onUpdate(flags);
 }
 
 void Map::render() {
@@ -217,6 +212,10 @@ void Map::Impl::update() {
         annotationManager->updateData();
     }
 
+    if (updateFlags & Update::Layout) {
+        style->relayout();
+    }
+
     if (updateFlags & Update::Classes) {
         style->cascade(timePoint, mode);
     }
@@ -227,7 +226,6 @@ void Map::Impl::update() {
 
     style::UpdateParameters parameters(pixelRatio,
                                        debugOptions,
-                                       timePoint,
                                        transform.getState(),
                                        style->workers,
                                        fileSource,
@@ -236,7 +234,7 @@ void Map::Impl::update() {
                                        *annotationManager,
                                        *style);
 
-    style->update(parameters);
+    style->updateTiles(parameters);
 
     if (mode == MapMode::Continuous) {
         view.invalidate();
@@ -906,8 +904,12 @@ void Map::onLowMemory() {
     impl->view.invalidate();
 }
 
-void Map::Impl::onNeedsRepaint() {
-    updateFlags |= Update::Repaint;
+void Map::Impl::onUpdate(Update flags) {
+    if (flags & Update::Dimensions) {
+        transform.resize(view.getSize());
+    }
+
+    updateFlags |= flags;
     asyncUpdate.send();
 }
 
