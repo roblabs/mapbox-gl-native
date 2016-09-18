@@ -703,7 +703,7 @@ public class MapView extends FrameLayout {
     // Zoom
     //
 
-    double getZoom() {
+    public double getZoom() {
         if (mDestroyed) {
             return 0;
         }
