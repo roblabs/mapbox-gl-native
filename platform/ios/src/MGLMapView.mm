@@ -1727,6 +1727,11 @@ public:
                                                otherButtonTitles:nil];
     
     _attributionInfos = [self.style attributionInfosWithFontSize:[UIFont buttonFontSize] linkColor:nil];
+    
+    // Let the i=1 entry for the actionSheet be customized
+    NSString *ePi = @"© eπ";
+    [self.attributionSheet addButtonWithTitle:ePi];
+
     for (MGLAttributionInfo *info in _attributionInfos)
     {
         NSString *title = [info.title.string mgl_titleCasedStringWithLocale:[NSLocale currentLocale]];
@@ -1766,9 +1771,14 @@ public:
                                               otherButtonTitles:NSLocalizedStringWithDefaultValue(@"TELEMETRY_MORE", nil, nil, @"Tell Me More", @"Telemetry prompt button"), optOut, nil];
         [alert show];
     }
-    else if (buttonIndex > 0)
+    else if (buttonIndex == 1) // Special case for our custom (C)opyright
     {
-        MGLAttributionInfo *info = _attributionInfos[buttonIndex + actionSheet.firstOtherButtonIndex];
+        [[UIApplication sharedApplication] openURL:
+         [NSURL URLWithString:@"http://RobLabs.com/Legal/"]]; // (c) 2016 ePi Rational, Inc.  eπ  or  𝑒Π.
+    }
+    else if (buttonIndex > 1) // Handle all others that come from Mapbox
+    {
+        MGLAttributionInfo *info = _attributionInfos[buttonIndex + actionSheet.firstOtherButtonIndex - 1];
         NSURL *url = info.URL;
         if (url)
         {
