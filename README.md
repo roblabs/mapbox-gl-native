@@ -6,14 +6,16 @@ A library for embedding interactive, customizable vector maps into native applic
 
 This branch is to demonstrate and document source code on how to use Mapbox GL + WebP for iOS.
 
-For the Cleveland National Forest map, raster tiling with lossless PNG created map data of 103 MB.  Raster tiling using WebP, covering the same region, and the same zoom level created map data of 34 MB.  Given that [iOS Apps are capped at 100 MB](https://developer.apple.com/library/content/documentation/LanguagesUtilities/Conceptual/iTunesConnect_Guide/Chapters/SubmittingTheApp.html)... we at the Labs are bullish on [WebP](http://RobLabs.com/webp).
+For the Cleveland National Forest map, "raster tiling with lossless PNG" created map data of 103 MB.  "Raster tiling using WebP", covering the same region, and the same zoom level created map data of 34 MB.  A reduction in size of 66 MB!!
+
+Given that [iOS Apps are capped at 100 MB](https://developer.apple.com/library/content/documentation/LanguagesUtilities/Conceptual/iTunesConnect_Guide/Chapters/SubmittingTheApp.html)... we at the Rob Labs are bullish on [WebP](http://RobLabs.com/webp).
 
 
 This demo is based on the `mapbox-gl-native` tag  [ios-v3.6.0](https://github.com/mapbox/mapbox-gl-native/tree/ios-v3.6.0)
 
 ### WebP as a `mason` package
 
-Ideally, WebP should compiled in using the [`mapbox/mason`](https://github.com/mapbox/mason) architecture.  *cf.* [#450](https://github.com/mapbox/mason/issues/450)
+Ideally, WebP should be compiled using the [`mapbox/mason`](https://github.com/mapbox/mason) architecture.  *cf.* [#450](https://github.com/mapbox/mason/issues/450)
 
 *  [platform/ios/config.cmake](platform/ios/config.cmake#L4) has comments on how to pull in WebP using Mason
 
