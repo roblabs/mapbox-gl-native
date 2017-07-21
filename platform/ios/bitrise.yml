@@ -2,6 +2,8 @@
 format_version: 1.0.0
 default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
 trigger_map:
+- pattern: nightly-release
+  workflow: nightly-release
 - pattern: "*"
   is_pull_request_allowed: true
   workflow: primary
@@ -9,53 +11,35 @@ workflows:
   primary:
     steps:
     - script:
-        title: Check for skipping CI
+        title: Install Dependencies
         inputs:
         - content: |-
             #!/bin/bash
-
-            if [[ -n "$(echo $GIT_CLONE_COMMIT_MESSAGE_SUBJECT | sed -n '/\[skip ci\]/p')"  ||
-                  -n "$(echo $GIT_CLONE_COMMIT_MESSAGE_SUBJECT | sed -n '/\[ci skip\]/p')"  ||
-                  -n "$(echo $GIT_CLONE_COMMIT_MESSAGE_BODY    | sed -n 's/\[skip ci\]/p')" ||
-                  -n "$(echo $GIT_CLONE_COMMIT_MESSAGE_BODY    | sed -n 's/\[ci skip\]/p')" ]]; then
-                envman add --key SKIPCI --value true
-            else
-                envman add --key SKIPCI --value false
-            fi
-    - select-xcode-version:
-        title: Select Xcode version
-        run_if: '{{enveq "SKIPCI" "false"}}'
+            set -eu -o pipefail
+            brew install cmake
+            brew tap mapbox/homebrew-ios-sim-3
+            brew install mapbox/homebrew-ios-sim-3/ios-sim
+        - is_debug: 'yes'
     - script:
-        title: Install Homebrew dependencies
-        run_if: '{{enveq "SKIPCI" "false"}}'
+        title: Generate Workspace
         inputs:
         - content: |-
             #!/bin/bash
-
-            brew install pkgconfig
-            brew install automake
-            gem install jazzy
-    - script:
-        title: Run make ipackage-sim
-        run_if: '{{enveq "SKIPCI" "false"}}'
-        inputs:
-        - content: |-
-            #!/bin/bash
-
-            make ipackage-sim
+            set -eu -o pipefail
+            export BUILDTYPE=Debug
+            make iproj
         - is_debug: 'yes'
     - xcode-test:
-        title: Run Xcode Tests
-        run_if: '{{enveq "SKIPCI" "false"}}'
+        title: Run SDK Unit Tests
         inputs:
-        - project_path: "./test/ios/ios-tests.xcodeproj"
-        - scheme: Mapbox GL Tests
-        - simulator_device: iPhone 6
-          opts:
-            is_expand: false
+        - project_path: platform/ios/ios.xcworkspace
+        - scheme: CI
+    - deploy-to-bitrise-io:
+        title: Deploy to Bitrise.io
+        inputs:
+        - notify_user_groups: none
     - slack:
         title: Post to Slack
-        run_if: '{{enveq "SKIPCI" "false"}}'
         inputs:
         - webhook_url: "$SLACK_HOOK_URL"
         - channel: "#gl-bots"
@@ -71,5 +55,48 @@ workflows:
             failed'
         - icon_url: https://bitrise-public-content-production.s3.amazonaws.com/slack/bitrise-slack-icon-128.png
         - icon_url_on_error: https://bitrise-public-content-production.s3.amazonaws.com/slack/bitrise-slack-error-icon-128.png
-    before_run: 
-    after_run: 
+  nightly-release:
+    steps:
+    - script:
+        title: Install Dependencies
+        inputs:
+        - content: |-
+            #!/bin/bash
+            set -eu -o pipefail
+            brew install cmake
+        - is_debug: 'yes'
+    - script:
+        title: Configure AWS-CLI
+        inputs:
+        - content: |-
+            #!/bin/bash
+            apt-get install -y python-pip python-dev build-essential
+            pip install awscli
+    - script:
+        title: Build package
+        inputs:
+        - content: |-
+            #!/bin/bash
+            set -eu -o pipefail
+            export BUILDTYPE=Release
+            export BUILD_DEVICE=true
+            export FORMAT=dynamic
+            make ipackage-strip
+            CLOUDWATCH=true platform/ios/scripts/metrics.sh
+            platform/ios/scripts/deploy-nightly.sh
+        - is_debug: 'yes'
+    - slack:
+        title: Post to Slack
+        inputs:
+        - webhook_url: "$SLACK_HOOK_URL"
+        - channel: "#gl-bots"
+        - from_username: 'Bitrise iOS Nightly \U0001F31D'
+        - from_username_on_error: 'Bitrise iOS Nightly \U0001F31D'
+        - message: '<${BITRISE_BUILD_URL}|Build #${BITRISE_BUILD_NUMBER}>
+            for <https://github.com/mapbox/mapbox-gl-native/compare/${BITRISE_GIT_BRANCH}@%7B1day%7D...${BITRISE_GIT_BRANCH}|mapbox/mapbox-gl-native@${BITRISE_GIT_BRANCH}>
+            completed successfully.'
+        - message_on_error: '<${BITRISE_BUILD_URL}|Build #${BITRISE_BUILD_NUMBER}>
+            for <https://github.com/mapbox/mapbox-gl-native/compare/${BITRISE_GIT_BRANCH}@%7B1day%7D...${BITRISE_GIT_BRANCH}|mapbox/mapbox-gl-native@${BITRISE_GIT_BRANCH}>
+            failed.'
+        - icon_url: https://bitrise-public-content-production.s3.amazonaws.com/slack/bitrise-slack-icon-128.png
+        - icon_url_on_error: https://bitrise-public-content-production.s3.amazonaws.com/slack/bitrise-slack-error-icon-128.png

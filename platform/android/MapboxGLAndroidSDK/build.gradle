@@ -1,49 +1,113 @@
-apply plugin: 'android-sdk-manager'
 apply plugin: 'com.android.library'
-apply plugin: 'checkstyle'
-apply plugin: 'maven'
-apply plugin: 'signing'
-
-allprojects {
-    group project.GROUP
-    version project.VERSION_NAME
-
-    repositories {
-        mavenCentral()
-    }
-}
-
-repositories {
-    mavenCentral()
-}
-
-ext {
-    supportLibVersion = '23.1.1'
-}
 
 dependencies {
-    compile "com.android.support:support-annotations:${supportLibVersion}"
-    compile "com.android.support:support-v4:${supportLibVersion}"
-    compile "com.android.support:design:${supportLibVersion}"
-    compile 'com.squareup.okhttp3:okhttp:3.0.1'
-    compile 'com.mapzen.android:lost:1.0.1'
+    compile rootProject.ext.dep.supportAnnotations
+    compile rootProject.ext.dep.supportV4
+    compile rootProject.ext.dep.supportDesign
+    compile rootProject.ext.dep.timber
+    compile rootProject.ext.dep.okhttp3
+    compile(rootProject.ext.dep.lost) {
+        exclude group: 'com.google.guava'
+    }
+    testCompile rootProject.ext.dep.junit
+    testCompile rootProject.ext.dep.mockito
+
+    // Mapbox Android Services (GeoJSON support)
+    compile(rootProject.ext.dep.mapboxJavaGeoJSON) {
+        transitive = true
+    }
+
+    // Mapbox Android Services (Telemetry support)
+    compile(rootProject.ext.dep.mapboxAndroidTelemetry) {
+        transitive = true
+    }
 }
 
 android {
-    compileSdkVersion Integer.parseInt(project.ANDROID_BUILD_SDK_VERSION)
-    buildToolsVersion project.ANDROID_BUILD_TOOLS_VERSION
+    compileSdkVersion rootProject.ext.compileSdkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
 
     defaultConfig {
-        minSdkVersion Integer.parseInt(project.ANDROID_MIN_SDK)
-        targetSdkVersion Integer.parseInt(project.ANDROID_BUILD_TARGET_SDK_VERSION)
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        buildConfigField "String", "GIT_REVISION_SHORT", String.format("\"%s\"", getGitRevision())
+        buildConfigField "String", "MAPBOX_VERSION_STRING", String.format("\"Mapbox/%s\"", project.VERSION_NAME)
+        buildConfigField "String", "MAPBOX_EVENTS_USER_AGENT", String.format("\"MapboxEventsAndroid/%s\"", project.VERSION_NAME)
     }
+
+    defaultPublishConfig project.hasProperty("mapbox.buildtype") ? project.getProperty("mapbox.buildtype") : "debug"
+
+    // We sometimes want to invoke Gradle without building a native dependency, e.g. when we just want
+    // to invoke the Java tests. When we explicitly specify an ABI of 'none', no native dependencies are
+    // added. When another ABI is specified explicitly, we're just going to build that ABI. In all other
+    // cases, all ABIs are built.
+    // When invoking from the command line, set `-Pmapbox.abis=...` to only build the desired architectures.
+    // When building from Android Studio, gradle.properties sets `android.buildOnlyTargetAbi=true` so that
+    // only the architecture for the device you're running on gets built.
+    def abi = 'all'
+    if (!project.hasProperty('android.injected.invoked.from.ide')) {
+        // Errors when the user invokes Gradle from the command line and didn't set mapbox.abis
+        abi = project.getProperty("mapbox.abis")
+    }
+
+    if (abi != 'none') {
+        externalNativeBuild {
+            cmake {
+                path "../../../CMakeLists.txt"
+            }
+        }
+    }
+
+    defaultConfig {
+        if (abi != 'none') {
+            externalNativeBuild {
+                cmake {
+                    arguments "-DANDROID_TOOLCHAIN=clang"
+                    arguments "-DANDROID_STL=c++_static"
+                    arguments "-DANDROID_CPP_FEATURES=rtti;exceptions"
+                    arguments "-DMBGL_PLATFORM=android"
+                    arguments "-DMASON_PLATFORM=android"
+                    arguments "-DNodeJS_EXECUTABLE=" + rootProject.ext.node
+                    arguments "-Dnpm_EXECUTABLE=" + rootProject.ext.npm
+
+                    // Enable ccache if the user has installed it.
+                    if (rootProject.ext.ccache?.trim()) {
+                        arguments "-DANDROID_CCACHE=" + rootProject.ext.ccache
+                        // ccache splits up the compile command until multiple invocations and uses -E
+                        // with one of them, and clang doesn't like unused arguments in that case.
+                        cFlags "-Qunused-arguments"
+                        cppFlags "-Qunused-arguments"
+                    }
+
+                    targets "mapbox-gl"
+
+                    if (defaultPublishConfig.equalsIgnoreCase("debug")) {
+                        targets "example-custom-layer"
+                    }
+
+                    if (project.hasProperty("mapbox.with_test")) {
+                        targets "mbgl-test"
+                    }
+
+                    if (abi != 'all') {
+                        abiFilters abi.split(' ')
+                    } else {
+                        abiFilters "armeabi", "armeabi-v7a", "mips", "x86", "arm64-v8a", "x86_64"
+                    }
+                }
+            }
+        }
+
+        // proguard config for .aar
+        consumerProguardFiles 'proguard-rules.pro'
+    }
+
+    // avoid naming conflicts, force usage of prefix
+    resourcePrefix 'mapbox_'
 
     sourceSets {
+        // limit amount of exposed library resources
         main.res.srcDirs += 'src/main/res-public'
-    }
-
-    repositories {
-        mavenCentral()
     }
 
     compileOptions {
@@ -52,9 +116,13 @@ android {
     }
 
     lintOptions {
+        baseline file("lint-baseline.xml")
         checkAllWarnings true
         warningsAsErrors true
-        disable 'InvalidPackage'
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
     }
 
     buildTypes {
@@ -63,10 +131,17 @@ android {
         }
 
         release {
+            // aar proguard configuration
             jniDebuggable false
-            consumerProguardFiles 'proguard-rules.pro'
         }
     }
+}
+
+def getGitRevision() {
+    def cmd = "git rev-parse --short HEAD"
+    def proc = cmd.execute()
+    def ref = proc.text.trim()
+    return ref
 }
 
 configurations {
@@ -74,205 +149,8 @@ configurations {
     all*.exclude group: 'commons-collections', module: 'commons-collections'
 }
 
-
-android.libraryVariants.all { variant ->
-    def name = variant.name
-    task "javadoc$name"(type: Javadoc) {
-        description = "Generates javadoc for build $name"
-        failOnError = false
-        destinationDir = new File(destinationDir, variant.baseName)
-        source = files(variant.javaCompile.source)
-        classpath = files(variant.javaCompile.classpath.files) + files(android.bootClasspath)
-        exclude '**/R.java', '**/BuildConfig.java', 'com/almeros/**'
-        options.windowTitle("Mapbox Android SDK $VERSION_NAME Reference")
-        options.docTitle("Mapbox Android SDK $VERSION_NAME")
-        options.header("Mapbox Android SDK $VERSION_NAME Reference")
-        options.bottom("&copy; 2015&ndash;2016 Mapbox. All rights reserved.")
-        options.links("http://docs.oracle.com/javase/7/docs/api/")
-        options.linksOffline("http://d.android.com/reference/", "$System.env.ANDROID_HOME/docs/reference")
-        options.overview("src/main/java/overview.html")
-        options.group("Mapbox Android SDK", "com.mapbox.*")
-        options.group("Third Party Libraries", "com.almeros.*")
-        // TODO exclude generated R, BuildConfig, com.almeros.*
-    }
-}
-
-checkstyle {
-    configFile project.file('../checks.xml')
-    showViolations true
-}
-
-/*
-task cleanJNIBuilds {
-    def jniLibsDir = new File("MapboxGLAndroidSDK/src/main/jniLibs")
-    delete jniLibsDir.absolutePath
-}
-*/
-
-android.libraryVariants.all { variant ->
-    def name = variant.buildType.name
-    def checkstyle = project.tasks.create "checkstyle${name.capitalize()}", Checkstyle
-    checkstyle.dependsOn variant.javaCompile
-    checkstyle.source variant.javaCompile.source
-    checkstyle.classpath = project.fileTree(variant.javaCompile.destinationDir)
-    checkstyle.exclude('**/BuildConfig.java')
-    checkstyle.exclude('**/R.java')
-    checkstyle.exclude('**/com/almeros/android/multitouch/**')
-    project.tasks.getByName("check").dependsOn checkstyle
-}
-
-// From https://raw.github.com/mcxiaoke/gradle-mvn-push/master/jar.gradle
-android.libraryVariants.all { variant ->
-    def jarTask = project.tasks.create(name: "jar${variant.name.capitalize()}", type: Jar) {
-        from variant.javaCompile.destinationDir
-        exclude "**/R.class"
-        exclude "**/BuildConfig.class"
-    }
-    jarTask.dependsOn variant.javaCompile
-    artifacts.add('archives', jarTask);
-}
-
-// From https://raw.github.com/mcxiaoke/gradle-mvn-push/master/gradle-mvn-push.gradle
-def isReleaseBuild() {
-    return VERSION_NAME.contains("SNAPSHOT") == false
-}
-
-def getReleaseRepositoryUrl() {
-    return hasProperty('RELEASE_REPOSITORY_URL') ? RELEASE_REPOSITORY_URL :
-            "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
-}
-
-def getSnapshotRepositoryUrl() {
-    return hasProperty('SNAPSHOT_REPOSITORY_URL') ? SNAPSHOT_REPOSITORY_URL :
-            "https://oss.sonatype.org/content/repositories/snapshots/"
-}
-
-def getRepositoryUsername() {
-    return hasProperty('USERNAME') ? USERNAME :
-            (hasProperty('NEXUS_USERNAME') ? NEXUS_USERNAME : "")
-}
-
-def getRepositoryPassword() {
-    return hasProperty('PASSWORD') ? PASSWORD :
-            (hasProperty('NEXUS_PASSWORD') ? NEXUS_PASSWORD : "")
-}
-
-
-task apklib(type: Zip) {
-    appendix = extension = 'apklib'
-
-    from 'AndroidManifest.xml'
-    into('res') {
-        from 'res'
-    }
-    into('src') {
-        from 'src'
-    }
-}
-
-artifacts {
-    archives apklib
-}
-
-afterEvaluate { project ->
-    uploadArchives {
-        repositories {
-            mavenDeployer {
-                beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-
-                pom.groupId = GROUP
-                pom.artifactId = POM_ARTIFACT_ID
-                pom.version = VERSION_NAME
-
-                repository(url: getReleaseRepositoryUrl()) {
-                    authentication(userName: getRepositoryUsername(),
-                            password: getRepositoryPassword())
-                }
-                snapshotRepository(url: getSnapshotRepositoryUrl()) {
-                    authentication(userName: getRepositoryUsername(),
-                            password: getRepositoryPassword())
-                }
-
-/*
-                // Leaving out as artifact was incorrectly named when found
-                addFilter('aar') { artifact, file ->
-                    artifact.name == archivesBaseName
-                }
-                addFilter('apklib') { artifact, file ->
-                    artifact.name == archivesBaseName + '-apklib'
-                }
-*/
-
-                pom.project {
-                    name POM_NAME
-                    packaging POM_PACKAGING
-                    description POM_DESCRIPTION
-                    url POM_URL
-
-                    scm {
-                        url POM_SCM_URL
-                        connection POM_SCM_CONNECTION
-                        developerConnection POM_SCM_DEV_CONNECTION
-                    }
-
-                    licenses {
-                        license {
-                            name POM_LICENCE_NAME
-                            url POM_LICENCE_URL
-                            distribution POM_LICENCE_DIST
-                        }
-                    }
-
-                    developers {
-                        developer {
-                            id POM_DEVELOPER_ID
-                            name POM_DEVELOPER_NAME
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    signing {
-        required { isReleaseBuild() && gradle.taskGraph.hasTask("uploadArchives") }
-        sign configurations.archives
-    }
-
-    task androidJavadocs(type: Javadoc) {
-        source = android.sourceSets.main.java.sourceFiles
-        classpath = files(android.bootClasspath)
-    }
-
-    task androidJavadocsJar(type: Jar, dependsOn: androidJavadocs) {
-        classifier = 'javadoc'
-        from androidJavadocs.destinationDir
-    }
-
-    task androidSourcesJar(type: Jar) {
-        classifier = 'sources'
-        from android.sourceSets.main.java.sourceFiles
-    }
-
-    artifacts {
-        archives androidSourcesJar
-        archives androidJavadocsJar
-    }
-}
-
-
-task makeClean(type: Exec) {
-    workingDir '../../'
-    commandLine 'make', 'clean'
-}
-
-task makeAndroid(type: Exec) {
-    workingDir '../../'
-    commandLine 'make', 'android'
-}
-
-task makeAndroidAll(type: Exec) {
-    workingDir '../../'
-    commandLine 'make', 'apackage'
-}
-
+apply from: 'gradle-javadoc.gradle'
+apply from: 'gradle-publish.gradle'
+apply from: 'gradle-checkstyle.gradle'
+apply from: 'gradle-tests-staticblockremover.gradle'
+apply from: '../gradle-lint.gradle'

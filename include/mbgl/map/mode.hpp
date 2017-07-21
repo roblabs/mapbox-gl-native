@@ -1,5 +1,7 @@
-#ifndef MBGL_MAP_MODE
-#define MBGL_MAP_MODE
+#pragma once
+
+#include <mbgl/util/util.hpp>
+#include <mbgl/util/traits.hpp>
 
 #include <cstdint>
 
@@ -24,8 +26,16 @@ enum class GLContextMode : EnumType {
 // We can choose to constrain the map both horizontally or vertically, or only
 // vertically e.g. while panning.
 enum class ConstrainMode : EnumType {
+    None,
     HeightOnly,
     WidthAndHeight,
+};
+
+// Satisfies embedding platforms that requires the viewport coordinate systems
+// to be set according to its standards.
+enum class ViewportMode : EnumType {
+    Default,
+    FlippedY,
 };
 
 enum class MapDebugOptions : EnumType {
@@ -34,21 +44,32 @@ enum class MapDebugOptions : EnumType {
     ParseStatus = 1 << 2,
     Timestamps  = 1 << 3,
     Collision   = 1 << 4,
+    Overdraw    = 1 << 5,
+// FIXME: https://github.com/mapbox/mapbox-gl-native/issues/5117
+#if not MBGL_USE_GLES2
+    StencilClip = 1 << 6,
+    DepthBuffer = 1 << 7,
+#endif // MBGL_USE_GLES2
 };
 
-inline MapDebugOptions operator| (const MapDebugOptions& lhs, const MapDebugOptions& rhs) {
-    return MapDebugOptions(static_cast<EnumType>(lhs) | static_cast<EnumType>(rhs));
+MBGL_CONSTEXPR MapDebugOptions operator|(MapDebugOptions lhs, MapDebugOptions rhs) {
+    return MapDebugOptions(mbgl::underlying_type(lhs) | mbgl::underlying_type(rhs));
 }
 
-inline MapDebugOptions& operator|=(MapDebugOptions& lhs, const MapDebugOptions& rhs) {
-    lhs = lhs | rhs;
-    return lhs;
+MBGL_CONSTEXPR MapDebugOptions& operator|=(MapDebugOptions& lhs, MapDebugOptions rhs) {
+    return (lhs = MapDebugOptions(mbgl::underlying_type(lhs) | mbgl::underlying_type(rhs)));
 }
 
-inline bool operator& (const MapDebugOptions& lhs, const MapDebugOptions& rhs) {
-    return static_cast<EnumType>(lhs) & static_cast<EnumType>(rhs);
+MBGL_CONSTEXPR bool operator&(MapDebugOptions lhs, MapDebugOptions rhs) {
+    return mbgl::underlying_type(lhs) & mbgl::underlying_type(rhs);
+}
+
+MBGL_CONSTEXPR MapDebugOptions& operator&=(MapDebugOptions& lhs, MapDebugOptions rhs) {
+    return (lhs = MapDebugOptions(mbgl::underlying_type(lhs) & mbgl::underlying_type(rhs)));
+}
+
+MBGL_CONSTEXPR MapDebugOptions operator~(MapDebugOptions value) {
+    return MapDebugOptions(~mbgl::underlying_type(value));
 }
 
 } // namespace mbgl
-
-#endif // MBGL_MAP_MODE

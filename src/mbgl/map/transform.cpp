@@ -6,14 +6,16 @@
 #include <mbgl/util/math.hpp>
 #include <mbgl/util/unitbezier.hpp>
 #include <mbgl/util/interpolate.hpp>
-#include <mbgl/util/tile_coordinate.hpp>
-#include <mbgl/platform/log.hpp>
-#include <mbgl/platform/platform.hpp>
+#include <mbgl/util/chrono.hpp>
+#include <mbgl/util/projection.hpp>
+#include <mbgl/math/clamp.hpp>
+#include <mbgl/util/logging.hpp>
+#include <mbgl/util/platform.hpp>
 
 #include <cstdio>
 #include <cmath>
 
-using namespace mbgl;
+namespace mbgl {
 
 /** Converts the given angle (in radians) to be numerically close to the anchor angle, allowing it to be interpolated properly without sudden jumps. */
 static double _normalizeAngle(double angle, double anchorAngle)
@@ -35,36 +37,42 @@ static double _normalizeAngle(double angle, double anchorAngle)
     return angle;
 }
 
-inline bool _validPoint(const PrecisionPoint& point) {
-    return !std::isnan(point.x) && !std::isnan(point.y);
-}
-
-Transform::Transform(View &view_, ConstrainMode constrainMode)
-    : view(view_)
-    , state(constrainMode)
-{
+Transform::Transform(MapObserver& observer_,
+                     ConstrainMode constrainMode,
+                     ViewportMode viewportMode)
+    : observer(observer_), state(constrainMode, viewportMode) {
 }
 
 #pragma mark - Map View
 
-bool Transform::resize(const std::array<uint16_t, 2> size) {
-    if (state.width != size[0] || state.height != size[1]) {
-
-        view.notifyMapChange(MapChangeRegionWillChange);
-
-        state.width = size[0];
-        state.height = size[1];
-        state.constrain(state.scale, state.x, state.y);
-
-        view.notifyMapChange(MapChangeRegionDidChange);
-
-        return true;
-    } else {
-        return false;
+void Transform::resize(const Size size) {
+    if (size.isEmpty()) {
+        throw std::runtime_error("failed to resize: size is empty");
     }
+
+    if (state.size == size) {
+        return;
+    }
+
+    observer.onCameraWillChange(MapObserver::CameraChangeMode::Immediate);
+
+    state.size = size;
+    state.constrain(state.scale, state.x, state.y);
+
+    observer.onCameraDidChange(MapObserver::CameraChangeMode::Immediate);
 }
 
 #pragma mark - Camera
+
+CameraOptions Transform::getCameraOptions(const EdgeInsets& padding) const {
+    CameraOptions camera;
+    camera.center = getLatLng(padding);
+    camera.padding = padding;
+    camera.zoom = getZoom();
+    camera.angle = getAngle();
+    camera.pitch = getPitch();
+    return camera;
+}
 
 /**
  * Change any combination of center, zoom, bearing, and pitch, without
@@ -81,50 +89,45 @@ void Transform::jumpTo(const CameraOptions& camera) {
  * not included in `options`.
  */
 void Transform::easeTo(const CameraOptions& camera, const AnimationOptions& animation) {
-    LatLng latLng = camera.center ? *camera.center : getLatLng();
-    double zoom = camera.zoom ? *camera.zoom : getZoom();
-    double angle = camera.angle ? *camera.angle : getAngle();
-    double pitch = camera.pitch ? *camera.pitch : getPitch();
-    
-    if (!latLng || std::isnan(zoom)) {
+    const LatLng unwrappedLatLng = camera.center.value_or(getLatLng());
+    const LatLng latLng = unwrappedLatLng.wrapped();
+    double zoom = camera.zoom.value_or(getZoom());
+    double angle = camera.angle.value_or(getAngle());
+    double pitch = camera.pitch.value_or(getPitch());
+
+    if (std::isnan(zoom)) {
         return;
     }
-    
+
     // Determine endpoints.
-    EdgeInsets padding;
-    if (camera.padding) {
-        padding = *camera.padding;
+    EdgeInsets padding = camera.padding;
+    LatLng startLatLng = getLatLng(padding);
+    // If gesture in progress, we transfer the world rounds from the end
+    // longitude into start, so we can guarantee the "scroll effect" of rounding
+    // the world while assuring the end longitude remains wrapped.
+    if (isGestureInProgress()) {
+        startLatLng = LatLng(startLatLng.latitude(), startLatLng.longitude() - (unwrappedLatLng.longitude() - latLng.longitude()));
     }
-    const LatLng startLatLng = getLatLng(padding);
-    const PrecisionPoint startPoint = {
-        state.lngX(startLatLng.longitude),
-        state.latY(startLatLng.latitude),
-    };
-    unwrapLatLng(latLng);
-    const PrecisionPoint endPoint = {
-        state.lngX(latLng.longitude),
-        state.latY(latLng.latitude),
-    };
-    PrecisionPoint center = padding.getCenter(state.width, state.height);
-    center.y = state.height - center.y;
-    
+    // Find the shortest path otherwise.
+    else startLatLng.unwrapForShortestPath(latLng);
+
+    const Point<double> startPoint = Projection::project(startLatLng, state.scale);
+    const Point<double> endPoint = Projection::project(latLng, state.scale);
+
+    ScreenCoordinate center = getScreenCoordinate(padding);
+    center.y = state.size.height - center.y;
+
     // Constrain camera options.
     zoom = util::clamp(zoom, state.getMinZoom(), state.getMaxZoom());
     const double scale = state.zoomScale(zoom);
-    pitch = util::clamp(pitch, 0., util::PITCH_MAX);
-    
-    Update update = state.getZoom() == zoom ? Update::Repaint : Update::Zoom;
-    
+    pitch = util::clamp(pitch, state.min_pitch, state.max_pitch);
+
     // Minimize rotation by taking the shorter path around the circle.
     angle = _normalizeAngle(angle, state.angle);
     state.angle = _normalizeAngle(state.angle, angle);
 
     Duration duration = animation.duration ? *animation.duration : Duration::zero();
-    
-    const double startWorldSize = state.worldSize();
-    state.Bc = startWorldSize / 360;
-    state.Cc = startWorldSize / util::M2PI;
-    
+
     const double startScale = state.scale;
     const double startAngle = state.angle;
     const double startPitch = state.pitch;
@@ -133,91 +136,80 @@ void Transform::easeTo(const CameraOptions& camera, const AnimationOptions& anim
     state.rotating = angle != startAngle;
 
     startTransition(camera, animation, [=](double t) {
-        PrecisionPoint framePoint = util::interpolate(startPoint, endPoint, t);
-        LatLng frameLatLng = {
-            state.yLat(framePoint.y, startWorldSize),
-            state.xLng(framePoint.x, startWorldSize),
-        };
+        Point<double> framePoint = util::interpolate(startPoint, endPoint, t);
+        LatLng frameLatLng = Projection::unproject(framePoint, startScale);
         double frameScale = util::interpolate(startScale, scale, t);
         state.setLatLngZoom(frameLatLng, state.scaleZoom(frameScale));
-        
+
         if (angle != startAngle) {
             state.angle = util::wrap(util::interpolate(startAngle, angle, t), -M_PI, M_PI);
         }
         if (pitch != startPitch) {
             state.pitch = util::interpolate(startPitch, pitch, t);
         }
-        
-        if (padding) {
+
+        if (!padding.isFlush()) {
             state.moveLatLng(frameLatLng, center);
         }
-        return update;
     }, duration);
 }
 
 /** This method implements an “optimal path” animation, as detailed in:
-    
+
     Van Wijk, Jarke J.; Nuij, Wim A. A. “Smooth and efficient zooming and
         panning.” INFOVIS ’03. pp. 15–22.
         <https://www.win.tue.nl/~vanwijk/zoompan.pdf#page=5>.
-    
+
     Where applicable, local variable documentation begins with the associated
     variable or function in van Wijk (2003). */
 void Transform::flyTo(const CameraOptions &camera, const AnimationOptions &animation) {
-    LatLng latLng = camera.center ? *camera.center : getLatLng();
-    double zoom = camera.zoom ? *camera.zoom : getZoom();
-    double angle = camera.angle ? *camera.angle : getAngle();
-    double pitch = camera.pitch ? *camera.pitch : getPitch();
+    const LatLng latLng = camera.center.value_or(getLatLng()).wrapped();
+    double zoom = camera.zoom.value_or(getZoom());
+    double angle = camera.angle.value_or(getAngle());
+    double pitch = camera.pitch.value_or(getPitch());
 
-    if (!latLng || std::isnan(zoom)) {
+    if (std::isnan(zoom) || state.size.isEmpty()) {
         return;
     }
-    
+
     // Determine endpoints.
-    EdgeInsets padding;
-    if (camera.padding) {
-        padding = *camera.padding;
-    }
-    const LatLng startLatLng = getLatLng(padding);
-    const PrecisionPoint startPoint = {
-        state.lngX(startLatLng.longitude),
-        state.latY(startLatLng.latitude),
-    };
-    unwrapLatLng(latLng);
-    const PrecisionPoint endPoint = {
-        state.lngX(latLng.longitude),
-        state.latY(latLng.latitude),
-    };
-    PrecisionPoint center = padding.getCenter(state.width, state.height);
-    center.y = state.height - center.y;
-    
+    EdgeInsets padding = camera.padding;
+    LatLng startLatLng = getLatLng(padding).wrapped();
+    startLatLng.unwrapForShortestPath(latLng);
+
+    const Point<double> startPoint = Projection::project(startLatLng, state.scale);
+    const Point<double> endPoint = Projection::project(latLng, state.scale);
+
+    ScreenCoordinate center = getScreenCoordinate(padding);
+    center.y = state.size.height - center.y;
+
     // Constrain camera options.
     zoom = util::clamp(zoom, state.getMinZoom(), state.getMaxZoom());
-    pitch = util::clamp(pitch, 0., util::PITCH_MAX);
-    
+    pitch = util::clamp(pitch, state.min_pitch, state.max_pitch);
+
     // Minimize rotation by taking the shorter path around the circle.
     angle = _normalizeAngle(angle, state.angle);
     state.angle = _normalizeAngle(state.angle, angle);
-    
+
     const double startZoom = state.scaleZoom(state.scale);
     const double startAngle = state.angle;
     const double startPitch = state.pitch;
-    
+
     /// w₀: Initial visible span, measured in pixels at the initial scale.
     /// Known henceforth as a <i>screenful</i>.
-    double w0 = std::max(state.width - padding.left - padding.right,
-                         state.height - padding.top - padding.bottom);
+    double w0 = std::max(state.size.width - padding.left() - padding.right(),
+                         state.size.height - padding.top() - padding.bottom());
     /// w₁: Final visible span, measured in pixels with respect to the initial
     /// scale.
     double w1 = w0 / state.zoomScale(zoom - startZoom);
     /// Length of the flight path as projected onto the ground plane, measured
     /// in pixels from the world image origin at the initial scale.
     double u1 = ::hypot((endPoint - startPoint).x, (endPoint - startPoint).y);
-    
+
     /** ρ: The relative amount of zooming that takes place along the flight
         path. A high value maximizes zooming for an exaggerated animation, while
         a low value minimizes zooming for something closer to easeTo().
-        
+
         1.42 is the average value selected by participants in the user study in
         van Wijk (2003). A value of 6<sup>¼</sup> would be equivalent to the
         root mean squared average velocity, V<sub>RMS</sub>. A value of 1 would
@@ -233,29 +225,26 @@ void Transform::flyTo(const CameraOptions &camera, const AnimationOptions &anima
     }
     /// ρ²
     double rho2 = rho * rho;
-    
+
     /** rᵢ: Returns the zoom-out factor at one end of the animation.
-        
+
         @param i 0 for the ascent or 1 for the descent. */
     auto r = [=](double i) {
         /// bᵢ
         double b = (w1 * w1 - w0 * w0 + (i ? -1 : 1) * rho2 * rho2 * u1 * u1) / (2 * (i ? w1 : w0) * rho2 * u1);
         return std::log(std::sqrt(b * b + 1) - b);
     };
-    
-    // When u₀ = u₁, the optimal path doesn’t require both ascent and descent.
-    bool isClose = std::abs(u1) < 0.000001;
-    // Perform a more or less instantaneous transition if the path is too short.
-    if (isClose && std::abs(w0 - w1) < 0.000001) {
-        easeTo(camera, animation);
-        return;
-    }
-    
+
     /// r₀: Zoom-out factor during ascent.
     double r0 = r(0);
+    double r1 = r(1);
+
+    // When u₀ = u₁, the optimal path doesn’t require both ascent and descent.
+    bool isClose = std::abs(u1) < 1.0 || !std::isfinite(r0) || !std::isfinite(r1);
+
     /** w(s): Returns the visible span on the ground, measured in pixels with
         respect to the initial scale.
-        
+
         Assumes an angular field of view of 2 arctan ½ ≈ 53°. */
     auto w = [=](double s) {
         return (isClose ? std::exp((w1 < w0 ? -1 : 1) * rho * s)
@@ -270,8 +259,8 @@ void Transform::flyTo(const CameraOptions &camera, const AnimationOptions &anima
     };
     /// S: Total length of the flight path, measured in ρ-screenfuls.
     double S = (isClose ? (std::abs(std::log(w1 / w0)) / rho)
-                : ((r(1) - r0) / rho));
-    
+                : ((r1 - r0) / rho));
+
     Duration duration;
     if (animation.duration) {
         duration = *animation.duration;
@@ -281,201 +270,176 @@ void Transform::flyTo(const CameraOptions &camera, const AnimationOptions &anima
         if (animation.velocity) {
             velocity = *animation.velocity / rho;
         }
-        duration = std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-            std::chrono::duration<double, std::chrono::seconds::period>(S / velocity));
+        duration = std::chrono::duration_cast<Duration>(std::chrono::duration<double>(S / velocity));
     }
     if (duration == Duration::zero()) {
         // Perform an instantaneous transition.
         jumpTo(camera);
         return;
     }
-    
-    const double startWorldSize = state.worldSize();
-    state.Bc = startWorldSize / 360;
-    state.Cc = startWorldSize / util::M2PI;
-    
+
+    const double startScale = state.scale;
     state.panning = true;
     state.scaling = true;
     state.rotating = angle != startAngle;
-    
+
     startTransition(camera, animation, [=](double k) {
         /// s: The distance traveled along the flight path, measured in
         /// ρ-screenfuls.
         double s = k * S;
-        double us = u(s);
-        
+        double us = k == 1.0 ? 1.0 : u(s);
+
         // Calculate the current point and zoom level along the flight path.
-        PrecisionPoint framePoint = util::interpolate(startPoint, endPoint, us);
+        Point<double> framePoint = util::interpolate(startPoint, endPoint, us);
         double frameZoom = startZoom + state.scaleZoom(1 / w(s));
-        
+
+        // Zoom can be NaN if size is empty.
+        if (std::isnan(frameZoom)) {
+            frameZoom = zoom;
+        }
+
         // Convert to geographic coordinates and set the new viewpoint.
-        LatLng frameLatLng = {
-            state.yLat(framePoint.y, startWorldSize),
-            state.xLng(framePoint.x, startWorldSize),
-        };
+        LatLng frameLatLng = Projection::unproject(framePoint, startScale);
         state.setLatLngZoom(frameLatLng, frameZoom);
-        
+
         if (angle != startAngle) {
             state.angle = util::wrap(util::interpolate(startAngle, angle, k), -M_PI, M_PI);
         }
         if (pitch != startPitch) {
             state.pitch = util::interpolate(startPitch, pitch, k);
         }
-        
-        if (padding) {
+
+        if (!padding.isFlush()) {
             state.moveLatLng(frameLatLng, center);
         }
-        return Update::Zoom;
     }, duration);
-}
-
-/** If a path crossing the antemeridian would be shorter, extend the final
- coordinate so that interpolating between the two endpoints will cross it. */
-void Transform::unwrapLatLng(LatLng& latLng) {
-    LatLng startLatLng = getLatLng();
-    if (std::abs(startLatLng.longitude) + std::abs(latLng.longitude) > 180) {
-        if (startLatLng.longitude > 0 && latLng.longitude < 0) {
-            latLng.longitude += 360;
-        } else if (startLatLng.longitude < 0 && latLng.longitude > 0) {
-            latLng.longitude -= 360;
-        }
-    }
 }
 
 #pragma mark - Position
 
-void Transform::moveBy(const PrecisionPoint& offset, const Duration& duration) {
-    if (!_validPoint(offset)) {
-        return;
-    }
-
-    PrecisionPoint centerOffset = {
+void Transform::moveBy(const ScreenCoordinate& offset, const AnimationOptions& animation) {
+    ScreenCoordinate centerOffset = {
         offset.x,
         -offset.y,
     };
-    PrecisionPoint centerPoint = state.latLngToPoint(state.getLatLng()) - centerOffset;
+    ScreenCoordinate centerPoint = getScreenCoordinate() - centerOffset;
 
     CameraOptions camera;
-    camera.center = state.pointToLatLng(centerPoint);
-    easeTo(camera, duration);
+    camera.center = state.screenCoordinateToLatLng(centerPoint);
+    easeTo(camera, animation);
 }
 
-void Transform::setLatLng(const LatLng& latLng, const Duration& duration) {
-    setLatLng(latLng, EdgeInsets(), duration);
+void Transform::setLatLng(const LatLng& latLng, const AnimationOptions& animation) {
+    setLatLng(latLng, optional<ScreenCoordinate> {}, animation);
 }
 
-void Transform::setLatLng(const LatLng& latLng, const EdgeInsets& padding, const Duration& duration) {
-    if (!latLng) {
-        return;
-    }
-
+void Transform::setLatLng(const LatLng& latLng, const EdgeInsets& padding, const AnimationOptions& animation) {
     CameraOptions camera;
     camera.center = latLng;
-    if (padding) {
-        camera.padding = padding;
-    }
-    easeTo(camera, duration);
-}
-
-void Transform::setLatLng(const LatLng& latLng, const PrecisionPoint& point, const Duration& duration) {
-    if (!latLng || !point) {
-        return;
-    }
-    
-    // Pretend the viewport is 0×0 around the passed-in point.
-    CameraOptions camera;
-    camera.center = latLng;
-    EdgeInsets padding;
-    padding.top = point.y;
-    padding.left = point.x;
-    padding.bottom = state.height - point.y;
-    padding.right = state.width - point.x;
     camera.padding = padding;
-    easeTo(camera, duration);
+    easeTo(camera, animation);
 }
 
-void Transform::setLatLngZoom(const LatLng& latLng, double zoom, const Duration& duration) {
-    setLatLngZoom(latLng, zoom, {}, duration);
-}
-
-void Transform::setLatLngZoom(const LatLng& latLng, double zoom, const EdgeInsets& padding, const Duration& duration) {
-    if (!latLng || std::isnan(zoom)) {
-        return;
+void Transform::setLatLng(const LatLng& latLng, optional<ScreenCoordinate> anchor, const AnimationOptions& animation) {
+    CameraOptions camera;
+    camera.center = latLng;
+    if (anchor) {
+        camera.padding = EdgeInsets(anchor->y, anchor->x, state.size.height - anchor->y, state.size.width - anchor->x);
     }
+    easeTo(camera, animation);
+}
+
+void Transform::setLatLngZoom(const LatLng& latLng, double zoom, const AnimationOptions& animation) {
+    setLatLngZoom(latLng, zoom, EdgeInsets(), animation);
+}
+
+void Transform::setLatLngZoom(const LatLng& latLng, double zoom, const EdgeInsets& padding, const AnimationOptions& animation) {
+    if (std::isnan(zoom)) return;
 
     CameraOptions camera;
     camera.center = latLng;
-    if (padding) {
-        camera.padding = padding;
-    }
+    camera.padding = padding;
     camera.zoom = zoom;
-    easeTo(camera, duration);
+    easeTo(camera, animation);
 }
 
 LatLng Transform::getLatLng(const EdgeInsets& padding) const {
-    if (padding) {
-        return pointToLatLng(padding.getCenter(state.width, state.height));
-    } else {
+    if (padding.isFlush()) {
         return state.getLatLng();
+    } else {
+        return screenCoordinateToLatLng(padding.getCenter(state.size.width, state.size.height));
+    }
+}
+
+ScreenCoordinate Transform::getScreenCoordinate(const EdgeInsets& padding) const {
+    if (padding.isFlush()) {
+        return { state.size.width / 2., state.size.height / 2. };
+    } else {
+        return padding.getCenter(state.size.width, state.size.height);
     }
 }
 
 
 #pragma mark - Zoom
 
-void Transform::scaleBy(double ds, const PrecisionPoint& center, const Duration& duration) {
-    if (std::isnan(ds)) {
-        return;
-    }
-
-    double scale = util::clamp(state.scale * ds, state.min_scale, state.max_scale);
-    setScale(scale, center, duration);
+void Transform::setZoom(double zoom, const AnimationOptions& animation) {
+    CameraOptions camera;
+    camera.zoom = zoom;
+    easeTo(camera, animation);
 }
 
-void Transform::setZoom(double zoom, const PrecisionPoint& anchor, const Duration& duration) {
-    setScale(state.zoomScale(zoom), anchor, duration);
+void Transform::setZoom(double zoom, optional<ScreenCoordinate> anchor, const AnimationOptions& animation) {
+    CameraOptions camera;
+    camera.zoom = zoom;
+    camera.anchor = anchor;
+    easeTo(camera, animation);
 }
 
-void Transform::setZoom(double zoom, const EdgeInsets& padding, const Duration& duration) {
-    const PrecisionPoint center = padding.getCenter(state.width, state.height);
-    setZoom(zoom, center, duration);
+void Transform::setZoom(double zoom, const EdgeInsets& padding, const AnimationOptions& animation) {
+    CameraOptions camera;
+    camera.zoom = zoom;
+    if (!padding.isFlush()) camera.anchor = getScreenCoordinate(padding);
+    easeTo(camera, animation);
 }
 
 double Transform::getZoom() const {
     return state.getZoom();
 }
 
-double Transform::getScale() const {
-    return state.scale;
-}
+#pragma mark - Bounds
 
-void Transform::setScale(double scale, const PrecisionPoint& anchor, const Duration& duration) {
-    if (std::isnan(scale)) {
-        return;
+void Transform::setLatLngBounds(optional<LatLngBounds> bounds) {
+    if (bounds && !bounds->valid()) {
+        throw std::runtime_error("failed to set bounds: bounds are invalid");
     }
-    
-    CameraOptions camera;
-    camera.zoom = state.scaleZoom(scale);
-    camera.anchor = anchor;
-    easeTo(camera, duration);
+    state.setLatLngBounds(bounds);
 }
 
-void Transform::setScale(double scale, const EdgeInsets& padding, const Duration& duration) {
-    const PrecisionPoint center = padding.getCenter(state.width, state.height);
-    setScale(scale, center, duration);
+void Transform::setMinZoom(const double minZoom) {
+    if (std::isnan(minZoom)) return;
+    state.setMinZoom(minZoom);
+}
+
+void Transform::setMaxZoom(const double maxZoom) {
+    if (std::isnan(maxZoom)) return;
+    state.setMaxZoom(maxZoom);
+}
+
+void Transform::setMinPitch(double minPitch) {
+    if (std::isnan(minPitch)) return;
+    state.setMinPitch(minPitch);
+}
+
+void Transform::setMaxPitch(double maxPitch) {
+    if (std::isnan(maxPitch)) return;
+    state.setMaxPitch(maxPitch);
 }
 
 #pragma mark - Angle
 
-void Transform::rotateBy(const PrecisionPoint& first, const PrecisionPoint& second, const Duration& duration) {
-    if (!first || !second) {
-        return;
-    }
-
-    PrecisionPoint center(state.width, state.height);
-    center /= 2;
-
-    const PrecisionPoint offset = first - center;
+void Transform::rotateBy(const ScreenCoordinate& first, const ScreenCoordinate& second,  const AnimationOptions& animation) {
+    ScreenCoordinate center = getScreenCoordinate();
+    const ScreenCoordinate offset = first - center;
     const double distance = std::sqrt(std::pow(2, offset.x) + std::pow(2, offset.y));
 
     // If the first click was too close to the center, move the center of rotation by 200 pixels
@@ -487,33 +451,27 @@ void Transform::rotateBy(const PrecisionPoint& first, const PrecisionPoint& seco
         center.y = first.y + std::sin(rotateAngle) * heightOffset;
     }
 
-    const PrecisionPoint newFirst = first - center;
-    const PrecisionPoint newSecond = second - center;
-    const double ang = state.angle + util::angle_between(newFirst.x, newFirst.y, newSecond.x, newSecond.y);
-    
     CameraOptions camera;
-    camera.angle = ang;
-    easeTo(camera, duration);
+    camera.angle = state.angle + util::angle_between(first - center, second - center);
+    easeTo(camera, animation);
 }
 
-void Transform::setAngle(double angle, const Duration& duration) {
-    setAngle(angle, {NAN, NAN}, duration);
+void Transform::setAngle(double angle, const AnimationOptions& animation) {
+    setAngle(angle, optional<ScreenCoordinate> {}, animation);
 }
 
-void Transform::setAngle(double angle, const PrecisionPoint& anchor, const Duration& duration) {
-    if (std::isnan(angle)) {
-        return;
-    }
-    
+void Transform::setAngle(double angle, optional<ScreenCoordinate> anchor, const AnimationOptions& animation) {
+    if (std::isnan(angle)) return;
     CameraOptions camera;
     camera.angle = angle;
     camera.anchor = anchor;
-    easeTo(camera, duration);
+    easeTo(camera, animation);
 }
 
-void Transform::setAngle(double angle, const EdgeInsets& padding, const Duration& duration) {
-    const PrecisionPoint center = padding.getCenter(state.width, state.height);
-    setAngle(angle, center, duration);
+void Transform::setAngle(double angle, const EdgeInsets& padding, const AnimationOptions& animation) {
+    optional<ScreenCoordinate> anchor;
+    if (!padding.isFlush()) anchor = getScreenCoordinate(padding);
+    setAngle(angle, anchor, animation);
 }
 
 double Transform::getAngle() const {
@@ -522,14 +480,16 @@ double Transform::getAngle() const {
 
 #pragma mark - Pitch
 
-void Transform::setPitch(double pitch, const Duration& duration) {
-    if (std::isnan(pitch)) {
-        return;
-    }
+void Transform::setPitch(double pitch, const AnimationOptions& animation) {
+    setPitch(pitch, optional<ScreenCoordinate> {}, animation);
+}
 
+void Transform::setPitch(double pitch, optional<ScreenCoordinate> anchor, const AnimationOptions& animation) {
+    if (std::isnan(pitch)) return;
     CameraOptions camera;
     camera.pitch = pitch;
-    easeTo(camera, duration);
+    camera.anchor = anchor;
+    easeTo(camera, animation);
 }
 
 double Transform::getPitch() const {
@@ -547,25 +507,46 @@ NorthOrientation Transform::getNorthOrientation() const {
     return state.getNorthOrientation();
 }
 
+#pragma mark - Constrain mode
+
+void Transform::setConstrainMode(mbgl::ConstrainMode mode) {
+    state.constrainMode = mode;
+    state.constrain(state.scale, state.x, state.y);
+}
+
+ConstrainMode Transform::getConstrainMode() const {
+    return state.getConstrainMode();
+}
+
+#pragma mark - Viewport mode
+
+void Transform::setViewportMode(mbgl::ViewportMode mode) {
+    state.viewportMode = mode;
+}
+
+ViewportMode Transform::getViewportMode() const {
+    return state.getViewportMode();
+}
+
 #pragma mark - Transition
 
 void Transform::startTransition(const CameraOptions& camera,
                                 const AnimationOptions& animation,
-                                std::function<Update(double)> frame,
+                                std::function<void(double)> frame,
                                 const Duration& duration) {
     if (transitionFinishFn) {
         transitionFinishFn();
     }
-    
+
     bool isAnimated = duration != Duration::zero();
-    view.notifyMapChange(isAnimated ? MapChangeRegionWillChangeAnimated : MapChangeRegionWillChange);
-    
+    observer.onCameraWillChange(isAnimated ? MapObserver::CameraChangeMode::Animated : MapObserver::CameraChangeMode::Immediate);
+
     // Associate the anchor, if given, with a coordinate.
-    PrecisionPoint anchor = camera.anchor ? *camera.anchor : PrecisionPoint(NAN, NAN);
+    optional<ScreenCoordinate> anchor = camera.anchor;
     LatLng anchorLatLng;
-    if (_validPoint(anchor)) {
-        anchor.y = state.getHeight() - anchor.y;
-        anchorLatLng = state.pointToLatLng(anchor);
+    if (anchor) {
+        anchor->y = state.size.height - anchor->y;
+        anchorLatLng = state.screenCoordinateToLatLng(*anchor);
     }
 
     transitionStart = Clock::now();
@@ -573,24 +554,21 @@ void Transform::startTransition(const CameraOptions& camera,
 
     transitionFrameFn = [isAnimated, animation, frame, anchor, anchorLatLng, this](const TimePoint now) {
         float t = isAnimated ? (std::chrono::duration<float>(now - transitionStart) / transitionDuration) : 1.0;
-        Update result;
         if (t >= 1.0) {
-            result = frame(1.0);
+            frame(1.0);
         } else {
-            util::UnitBezier ease = animation.easing ? *animation.easing : util::UnitBezier(0, 0, 0.25, 1);
-            result = frame(ease.solve(t, 0.001));
+            util::UnitBezier ease = animation.easing ? *animation.easing : util::DEFAULT_TRANSITION_EASE;
+            frame(ease.solve(t, 0.001));
         }
-        
-        if (_validPoint(anchor)) {
-            state.moveLatLng(anchorLatLng, anchor);
-        }
-        
+
+        if (anchor) state.moveLatLng(anchorLatLng, *anchor);
+
         // At t = 1.0, a DidChangeAnimated notification should be sent from finish().
         if (t < 1.0) {
             if (animation.transitionFrameFn) {
                 animation.transitionFrameFn(t);
             }
-            view.notifyMapChange(MapChangeRegionIsChanging);
+            observer.onCameraIsChanging();
         } else {
             transitionFinishFn();
             transitionFinishFn = nullptr;
@@ -599,7 +577,6 @@ void Transform::startTransition(const CameraOptions& camera,
             // we can only return after this point.
             transitionFrameFn = nullptr;
         }
-        return result;
     };
 
     transitionFinishFn = [isAnimated, animation, this] {
@@ -609,9 +586,9 @@ void Transform::startTransition(const CameraOptions& camera,
         if (animation.transitionFinishFn) {
             animation.transitionFinishFn();
         }
-        view.notifyMapChange(isAnimated ? MapChangeRegionDidChangeAnimated : MapChangeRegionDidChange);
+        observer.onCameraDidChange(isAnimated ? MapObserver::CameraChangeMode::Animated : MapObserver::CameraChangeMode::Immediate);
     };
-    
+
     if (!isAnimated) {
         transitionFrameFn(Clock::now());
     }
@@ -621,8 +598,10 @@ bool Transform::inTransition() const {
     return transitionFrameFn != nullptr;
 }
 
-Update Transform::updateTransitions(const TimePoint& now) {
-    return transitionFrameFn ? transitionFrameFn(now) : Update::Nothing;
+void Transform::updateTransitions(const TimePoint& now) {
+    if (transitionFrameFn) {
+        transitionFrameFn(now);
+    }
 }
 
 void Transform::cancelTransitions() {
@@ -640,14 +619,16 @@ void Transform::setGestureInProgress(bool inProgress) {
 
 #pragma mark Conversion and projection
 
-PrecisionPoint Transform::latLngToPoint(const LatLng& latLng) const {
-    PrecisionPoint point = state.latLngToPoint(latLng);
-    point.y = state.height - point.y;
+ScreenCoordinate Transform::latLngToScreenCoordinate(const LatLng& latLng) const {
+    ScreenCoordinate point = state.latLngToScreenCoordinate(latLng);
+    point.y = state.size.height - point.y;
     return point;
 }
 
-LatLng Transform::pointToLatLng(const PrecisionPoint& point) const {
-    PrecisionPoint flippedPoint = point;
-    flippedPoint.y = state.height - flippedPoint.y;
-    return state.pointToLatLng(flippedPoint);
+LatLng Transform::screenCoordinateToLatLng(const ScreenCoordinate& point) const {
+    ScreenCoordinate flippedPoint = point;
+    flippedPoint.y = state.size.height - flippedPoint.y;
+    return state.screenCoordinateToLatLng(flippedPoint).wrapped();
 }
+
+} // namespace mbgl

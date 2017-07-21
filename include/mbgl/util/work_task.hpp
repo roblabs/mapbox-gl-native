@@ -1,7 +1,8 @@
-#ifndef MBGL_UTIL_WORK_TASK
-#define MBGL_UTIL_WORK_TASK
+#pragma once
 
 #include <mbgl/util/noncopyable.hpp>
+
+#include <memory>
 
 namespace mbgl {
 
@@ -14,8 +15,9 @@ public:
 
     virtual void operator()() = 0;
     virtual void cancel() = 0;
+
+    template <class Fn, class... Args>
+    static std::shared_ptr<WorkTask> make(Fn&&, Args&&...);
 };
 
 } // namespace mbgl
-
-#endif

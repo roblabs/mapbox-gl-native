@@ -25,5 +25,29 @@ CacheControl CacheControl::parse(const std::string& value) {
     return result;
 }
 
+optional<Timestamp> CacheControl::toTimePoint() const {
+    return maxAge ? util::now() + Seconds(*maxAge) : optional<Timestamp>{};
+}
+
+optional<Timestamp> parseRetryHeaders(const optional<std::string>& retryAfter,
+                                      const optional<std::string>& xRateLimitReset) {
+    if (retryAfter) {
+        try {
+            auto secs = std::chrono::seconds(std::stoi(*retryAfter));
+            return std::chrono::time_point_cast<Seconds>(std::chrono::system_clock::now() + secs);
+        } catch (...) {
+            return util::parseTimestamp((*retryAfter).c_str());
+        }
+    } else if (xRateLimitReset) {
+        try {
+            return util::parseTimestamp(std::stoi(*xRateLimitReset));
+        } catch (...) {
+            return {};
+        }
+    }
+
+    return {};
+}
+
 } // namespace http
 } // namespace mbgl

@@ -1,26 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical">
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
 
-    <android.support.v7.widget.Toolbar
-        android:id="@+id/toolbar"
+    <com.mapbox.mapboxsdk.maps.MapView
+        android:id="@id/mapView"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@color/primary"
-        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar" />
-
-    <com.mapbox.mapboxsdk.views.MapView
-        android:id="@+id/manualZoomMapView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
-    <Button
-        android:id="@+id/zoomInButton"
-        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/zoom_botton"
-        android:layout_gravity="right"/>
+        android:layout_below="@id/toolbar"
+        app:mapbox_cameraBearing="220"
+        app:mapbox_cameraTargetLat="50.871062"
+        app:mapbox_cameraTargetLng="1.583210"
+        app:mapbox_cameraZoom="10"/>
 
-</LinearLayout>
+</RelativeLayout>

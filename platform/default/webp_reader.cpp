@@ -1,6 +1,6 @@
 #include <mbgl/util/image.hpp>
 #include <mbgl/util/premultiply.hpp>
-#include <mbgl/platform/log.hpp>
+#include <mbgl/util/logging.hpp>
 
 extern "C"
 {
@@ -15,12 +15,16 @@ PremultipliedImage decodeWebP(const uint8_t* data, size_t size) {
         throw std::runtime_error("failed to retrieve WebP basic header information");
     }
 
-    std::unique_ptr<uint8_t[]> webp(WebPDecodeRGBA(data, size, &width, &height));
-    if (!webp) {
+    int stride = width * 4;
+    size_t webpSize = stride * height;
+    auto webp = std::make_unique<uint8_t[]>(webpSize);
+
+    if (!WebPDecodeRGBAInto(data, size, webp.get(), webpSize, stride)) {
         throw std::runtime_error("failed to decode WebP data");
     }
 
-    UnassociatedImage image { size_t(width), size_t(height), std::move(webp) };
+    UnassociatedImage image({ static_cast<uint32_t>(width), static_cast<uint32_t>(height) },
+                            std::move(webp));
     return util::premultiply(std::move(image));
 }
 

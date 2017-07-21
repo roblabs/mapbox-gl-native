@@ -4,7 +4,19 @@ package com.mapbox.mapboxsdk.geometry;
  * Describes a projection in Mercator meters.
  */
 public interface IProjectedMeters {
-    double getNorthing();
 
-    double getEasting();
+  /**
+   * Get the north projection, in meters.
+   *
+   * @return the projected meters in north direction
+   */
+  double getNorthing();
+
+  /**
+   * Get the east projection, in meters.
+   *
+   * @return the projected meters in east direction
+   */
+  double getEasting();
+
 }

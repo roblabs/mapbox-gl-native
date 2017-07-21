@@ -15,12 +15,21 @@ Install GCC 4.9+ if you are running Ubuntu 14.04 or older. Alternatively, you ca
     sudo apt-get install gcc-4.9 g++-4.9
     export CXX=g++-4.9
 
+**Note**: We partially support C++14 because GCC 4.9 does not fully implement the
+final draft of the C++14 standard. More information in [DEVELOPING.md](DEVELOPING.md).
+
 Ensure you have git and other build essentials:
 
     sudo apt-get install curl git build-essential zlib1g-dev automake \
                          libtool xutils-dev make cmake pkg-config python-pip \
                          libcurl4-openssl-dev libpng-dev libsqlite3-dev \
                          libllvm3.4
+
+Ensure you have cmake 3.x:
+
+    sudo add-apt-repository --yes ppa:george-edison55/cmake-3.x
+    sudo apt-get update
+    sudo apt-get install cmake cmake-data
 
 Install glfw3 dependencies:
 
@@ -33,14 +42,17 @@ Set the environment variable `MAPBOX_ACCESS_TOKEN` to your [Mapbox access token]
 
     export MAPBOX_ACCESS_TOKEN=MYTOKEN
 
-Then, you can then proceed to build the library:
+Optionally, you can specify a custom style to the test application:
 
-    git submodule update --init
-    make linux
+    export MAPBOX_STYLE_URL=MYSTYLEURL
+
+Then, you can then proceed to build the test application:
+
+    make glfw-app
 
 Set an access token as described below, and then run:
 
-    make run-linux
+    make run-glfw-app
 
 ### Test
 

@@ -1,83 +1,81 @@
 #include <mbgl/renderer/frame_history.hpp>
+#include <mbgl/math/minmax.hpp>
+#include <mbgl/gl/context.hpp>
 
-using namespace mbgl;
+#include <cassert>
 
-// Record frame history that will be used to calculate fading params
-void FrameHistory::record(const TimePoint now, float zoom) {
-    // first frame ever
-    if (history.empty()) {
-        history.emplace_back(FrameSnapshot{TimePoint::min(), zoom});
-        history.emplace_back(FrameSnapshot{TimePoint::min(), zoom});
-    }
+namespace mbgl {
 
-    if (!history.empty() || history.back().z != zoom) {
-        history.emplace_back(FrameSnapshot{now, zoom});
-    }
+FrameHistory::FrameHistory() {
+    changeOpacities.fill(0);
+    opacities.fill(0);
 }
 
-bool FrameHistory::needsAnimation(const Duration& duration) const {
-    if (history.empty()) {
-        return false;
+void FrameHistory::record(const TimePoint& now, float zoom, const Duration& duration) {
+
+    int16_t zoomIndex = std::floor(zoom * 10.0);
+
+    if (firstFrame) {
+        changeTimes.fill(now);
+
+        for (int16_t z = 0; z <= zoomIndex; z++) {
+            opacities.data[z] = 255u;
+        }
+        firstFrame = false;
     }
 
-    // If we have a value that is older than duration and whose z value is the
-    // same as the most current z value, and if all values inbetween have the
-    // same z value, we don't need animation, otherwise we probably do.
-    const FrameSnapshot& pivot = history.back();
-
-    int i = -1;
-    while ((int)history.size() > i + 1 && history[i + 1].now + duration < pivot.now) {
-        ++i;
-    }
-
-    if (i < 0) {
-        // There is no frame that is older than the duration time, so we need to
-        // check all frames.
-        i = 0;
-    }
-
-    // Make sure that all subsequent snapshots have the same zoom as the last
-    // pivot element.
-    for (; (int)history.size() > i; ++i) {
-        if (history[i].z != pivot.z) {
-            return true;
+    if (zoomIndex < previousZoomIndex) {
+        for (int16_t z = zoomIndex + 1; z <= previousZoomIndex; z++) {
+            changeTimes[z] = now;
+            changeOpacities[z] = opacities.data[z];
+        }
+    } else {
+        for (int16_t z = zoomIndex; z > previousZoomIndex; z--) {
+            changeTimes[z] = now;
+            changeOpacities[z] = opacities.data[z];
         }
     }
 
-    return false;
-}
-
-FadeProperties FrameHistory::getFadeProperties(const TimePoint now, const Duration& duration) {
-    // Remove frames until only one is outside the duration, or until there are only three
-    while (history.size() > 3 && history[1].now + duration < now) {
-        history.pop_front();
+    for (int16_t z = 0; z <= 255; z++) {
+        const std::chrono::duration<float> timeDiff = now - changeTimes[z];
+        const int32_t opacityChange = (duration == Milliseconds(0) ? 1 : (timeDiff / duration)) * 255;
+        const uint8_t opacity = z <= zoomIndex
+            ? util::min(255, changeOpacities[z] + opacityChange)
+            : util::max(0, changeOpacities[z] - opacityChange);
+        if (opacities.data[z] != opacity) {
+            opacities.data[z] = opacity;
+            dirty = true;
+        }
     }
 
-    if (history[1].now + duration < now) {
-        history[0].z = history[1].z;
+    if (zoomIndex != previousZoomIndex) {
+        previousZoomIndex = zoomIndex;
+        previousTime = now;
     }
 
-    // Find the range of zoom levels we want to fade between
-    float startingZ = history.front().z;
-    const FrameSnapshot lastFrame = history.back();
-    float endingZ = lastFrame.z;
-    float lowZ = ::fmin(startingZ, endingZ);
-    float highZ = ::fmax(startingZ, endingZ);
-
-    // Calculate the speed of zooming, and how far it would zoom in terms of zoom levels in one
-    // duration
-    float zoomDiff = endingZ - history[1].z;
-    std::chrono::duration<float> timeDiff = lastFrame.now - history[1].now;
-    float fadedist = zoomDiff / (timeDiff / duration);
-
-    // At end of a zoom when the zoom stops changing continue pretending to zoom at that speed
-    // bump is how much farther it would have been if it had continued zooming at the same rate
-    float bump = std::chrono::duration<float>(now - lastFrame.now) / duration * fadedist;
-
-    return FadeProperties {
-        fadedist,
-        lowZ,
-        highZ,
-        bump
-    };
+    time = now;
 }
+
+bool FrameHistory::needsAnimation(const Duration& duration) const {
+    return (time - previousTime) < duration;
+}
+
+void FrameHistory::upload(gl::Context& context, uint32_t unit) {
+    if (!texture) {
+        texture = context.createTexture(opacities, unit);
+    } else if (dirty) {
+        context.updateTexture(*texture, opacities, unit);
+    }
+    dirty = false;
+}
+
+void FrameHistory::bind(gl::Context& context, uint32_t unit) {
+    upload(context, unit);
+    context.bindTexture(*texture, unit);
+}
+
+bool FrameHistory::isVisible(const float zoom) const {
+    return opacities.data[std::floor(zoom * 10)] != 0;
+}
+
+} // namespace mbgl

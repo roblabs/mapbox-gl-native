@@ -1,14 +1,15 @@
-#ifndef MBGL_TEXT_CHECK_MAX_ANGLE
-#define MBGL_TEXT_CHECK_MAX_ANGLE
+#pragma once
 
-#include <mbgl/geometry/anchor.hpp>
-#include <mbgl/util/math.hpp>
+#include <mbgl/tile/geometry_tile_data.hpp>
 
 namespace mbgl {
 
-bool checkMaxAngle(const std::vector<Coordinate> &line, Anchor &anchor, const float labelLength,
-        const float windowSize, const float maxAngle);
+class Anchor;
+
+bool checkMaxAngle(const GeometryCoordinates& line,
+                   const Anchor& anchor,
+                   const float labelLength,
+                   const float windowSize,
+                   const float maxAngle);
 
 } // namespace mbgl
-
-#endif

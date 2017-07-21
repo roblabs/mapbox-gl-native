@@ -1,4 +1,4 @@
-mapbox-gl-native copyright (c) 2014-2016 Mapbox.
+mapbox-gl-native copyright (c) 2014-2017 Mapbox.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are
@@ -294,61 +294,37 @@ in this Software without prior written authorization of the copyright holder.
 
 ===========================================================================
 
-Mapbox GL uses portions of libjpeg.
+Mapbox GL uses portions of libjpeg-turbo.
 
-The authors make NO WARRANTY or representation, either express or implied,
-with respect to this software, its quality, accuracy, merchantability, or
-fitness for a particular purpose.  This software is provided "AS IS", and you,
-its user, assume the entire risk as to its quality and accuracy.
+This software is based in part on the work of the Independent JPEG Group.
 
-This software is copyright (C) 1991-2014, Thomas G. Lane, Guido Vollbeding.
-All Rights Reserved except as specified below.
+Copyright (C)2009-2015 D. R. Commander.  All Rights Reserved.
 
-Permission is hereby granted to use, copy, modify, and distribute this
-software (or portions thereof) for any purpose, without fee, subject to these
-conditions:
-(1) If any part of the source code for this software is distributed, then this
-README file must be included, with this copyright and no-warranty notice
-unaltered; and any additions, deletions, or changes to the original files
-must be clearly indicated in accompanying documentation.
-(2) If only executable code is distributed, then the accompanying
-documentation must state that "this software is based in part on the work of
-the Independent JPEG Group".
-(3) Permission for use of this software is granted only if the user accepts
-full responsibility for any undesirable consequences; the authors accept
-NO LIABILITY for damages of any kind.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
 
-These conditions apply to any software derived from or based on the IJG code,
-not just to the unmodified library.  If you use our work, you ought to
-acknowledge us.
+- Redistributions of source code must retain the above copyright notice,
+  this list of conditions and the following disclaimer.
+- Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+- Neither the name of the libjpeg-turbo Project nor the names of its
+  contributors may be used to endorse or promote products derived from this
+  software without specific prior written permission.
 
-Permission is NOT granted for the use of any IJG author's name or company name
-in advertising or publicity relating to this software or products derived from
-it.  This software may be referred to only as "the Independent JPEG Group's
-software".
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS",
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
 
-We specifically permit and encourage the use of this software as the basis of
-commercial products, provided that all warranty or liability claims are
-assumed by the product vendor.
-
-
-The Unix configuration script "configure" was produced with GNU Autoconf.
-It is copyright by the Free Software Foundation but is freely distributable.
-The same holds for its supporting scripts (config.guess, config.sub,
-ltmain.sh).  Another support script, install-sh, is copyright by X Consortium
-but is also freely distributable.
-
-The IJG distribution formerly included code to read and write GIF files.
-To avoid entanglement with the Unisys LZW patent (now expired), GIF reading
-support has been removed altogether, and the GIF writer has been simplified
-to produce "uncompressed GIFs".  This technique does not use the LZW
-algorithm; the resulting GIF files are larger than usual, but are readable
-by all standard GIF decoders.
-
-We are required to state that
-    "The Graphics Interchange Format(c) is the Copyright property of
-    CompuServe Incorporated.  GIF(sm) is a Service Mark property of
-    CompuServe Incorporated."
+TurboJPEG/LJT: this implements the TurboJPEG API using libjpeg or libjpeg-turbo
 
 ===========================================================================
 
@@ -444,36 +420,6 @@ fee, and encourage the use of this source code as a component to
 supporting the PNG file format in commercial products.  If you use this
 source code in a product, acknowledgment is not required but would be
 appreciated.
-
-===========================================================================
-
-Mapbox GL uses portions of libtess2.
-
-SGI FREE SOFTWARE LICENSE B (Version 2.0, Sept. 18, 2008)
-Copyright (C) [dates of first publication] Silicon Graphics, Inc.
-All Rights Reserved.
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
-of the Software, and to permit persons to whom the Software is furnished to do so,
-subject to the following conditions:
-
-The above copyright notice including the dates of first publication and either this
-permission notice or a reference to http://oss.sgi.com/projects/FreeB/ shall be
-included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL SILICON GRAPHICS, INC.
-BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
-OR OTHER DEALINGS IN THE SOFTWARE.
-
-Except as contained in this notice, the name of Silicon Graphics, Inc. shall not
-be used in advertising or otherwise to promote the sale, use or other dealings in
-this Software without prior written authorization from Silicon Graphics, Inc.
 
 ===========================================================================
 
@@ -978,3 +924,21 @@ freely, subject to the following restrictions:
 
   Jean-loup Gailly        Mark Adler
   jloup@gzip.org          madler@alumni.caltech.edu
+
+===========================================================================
+
+Mapbox GL uses portions of Realm Objective-C.
+
+Copyright 2015 Realm Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.

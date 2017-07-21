@@ -1,6 +1,7 @@
 #import "MGLUserLocation_Private.h"
 
 #import "MGLMapView.h"
+#import "NSBundle+MGLAdditions.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -23,6 +24,44 @@ NS_ASSUME_NONNULL_END
     }
 
     return self;
+}
+
++ (BOOL)supportsSecureCoding {
+    return YES;
+}
+
+- (instancetype)initWithCoder:(NSCoder *)decoder {
+    if (self = [super init]) {
+        _location = [decoder decodeObjectOfClass:[CLLocation class] forKey:@"location"];
+        _title = [decoder decodeObjectOfClass:[NSString class] forKey:@"title"];
+        _subtitle = [decoder decodeObjectOfClass:[NSString class] forKey:@"subtitle"];
+    }
+    return self;
+}
+
+- (void)encodeWithCoder:(NSCoder *)coder {
+    [coder encodeObject:_location forKey:@"location"];
+    [coder encodeObject:_title forKey:@"title"];
+    [coder encodeObject:_subtitle forKey:@"subtitle"];
+}
+
+- (BOOL)isEqual:(id)other {
+    if (self == other) return YES;
+    if (![other isKindOfClass:[MGLUserLocation class]]) return NO;
+
+    MGLUserLocation *otherUserLocation = other;
+    return ((!self.location && !otherUserLocation.location) || [self.location distanceFromLocation:otherUserLocation.location] == 0)
+    && ((!self.title && !otherUserLocation.title) || [self.title isEqualToString:otherUserLocation.title])
+    && ((!self.subtitle && !otherUserLocation.subtitle) || [self.subtitle isEqualToString:otherUserLocation.subtitle]);
+}
+
+- (NSUInteger)hash {
+    NSUInteger hash = [super hash];
+    hash += [_location hash];
+    hash += [_heading hash];
+    hash += [_title hash];
+    hash += [_subtitle hash];
+    return hash;
 }
 
 + (BOOL)automaticallyNotifiesObserversForKey:(NSString *)key
@@ -68,7 +107,19 @@ NS_ASSUME_NONNULL_END
 
 - (NSString *)title
 {
-    return (_title ? _title : @"You Are Here");
+    return _title ?: NSLocalizedStringWithDefaultValue(@"USER_DOT_TITLE", nil, nil, @"You Are Here", @"Default user location annotation title");
+}
+
+- (NSString *)description
+{
+    return [NSString stringWithFormat:@"<%@: %p; location = %f, %f; updating = %@; altitude = %.0fm; heading = %.0f°; title = %@; subtitle = %@>",
+            NSStringFromClass([self class]), (void *)self,
+            self.location.coordinate.latitude, self.location.coordinate.longitude,
+            self.updating ? @"yes" : @"no",
+            self.location.altitude,
+            self.heading.trueHeading,
+            self.title ? [NSString stringWithFormat:@"\"%@\"", self.title] : self.title,
+            self.subtitle ? [NSString stringWithFormat:@"\"%@\"", self.subtitle] : self.subtitle];
 }
 
 @end

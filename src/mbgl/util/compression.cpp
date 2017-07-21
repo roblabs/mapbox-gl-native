@@ -1,4 +1,4 @@
-#include "compression.hpp"
+#include <mbgl/util/compression.hpp>
 
 #include <zlib.h>
 
@@ -6,11 +6,8 @@
 #include <cstring>
 #include <stdexcept>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
-
 // Check zlib library version.
-const static bool zlibVersionCheck = []() {
+const static bool zlibVersionCheck __attribute__((unused)) = []() {
     const char *const version = zlibVersion();
     if (version[0] != ZLIB_VERSION[0]) {
         char message[96];
@@ -22,10 +19,13 @@ const static bool zlibVersionCheck = []() {
     return true;
 }();
 
-#pragma GCC diagnostic pop
-
 namespace mbgl {
 namespace util {
+
+// Needed when using a zlib compiled with -DZ_PREFIX
+// because it will mess with this function name and
+// cause a link error.
+#undef compress
 
 std::string compress(const std::string &raw) {
     z_stream deflate_stream;

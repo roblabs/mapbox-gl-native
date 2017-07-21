@@ -1,11 +1,15 @@
 #include <mbgl/map/map.hpp>
 #include <mbgl/util/image.hpp>
-#include <mbgl/util/io.hpp>
 #include <mbgl/util/run_loop.hpp>
 
-#include <mbgl/platform/default/headless_view.hpp>
-#include <mbgl/platform/default/headless_display.hpp>
+#include <mbgl/gl/headless_backend.hpp>
+#include <mbgl/gl/offscreen_view.hpp>
+#include <mbgl/util/default_thread_pool.hpp>
 #include <mbgl/storage/default_file_source.hpp>
+#include <mbgl/style/style.hpp>
+#include <mbgl/renderer/renderer.hpp>
+#include <mbgl/renderer/backend_scope.hpp>
+#include <mbgl/renderer/async_renderer_frontend.hpp>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunknown-pragmas"
@@ -18,20 +22,21 @@ namespace po = boost::program_options;
 
 #include <cstdlib>
 #include <iostream>
+#include <fstream>
 
 int main(int argc, char *argv[]) {
     std::string style_path;
     double lat = 0, lon = 0;
     double zoom = 0;
     double bearing = 0;
+    double pitch = 0;
+    double pixelRatio = 1;
 
-    int width = 512;
-    int height = 512;
-    double pixelRatio = 1.0;
+    uint32_t width = 512;
+    uint32_t height = 512;
     static std::string output = "out.png";
     std::string cache_file = "cache.sqlite";
     std::string asset_root = ".";
-    std::vector<std::string> classes;
     std::string token;
     bool debug = false;
 
@@ -42,9 +47,10 @@ int main(int argc, char *argv[]) {
         ("lat,y", po::value(&lat)->value_name("degrees")->default_value(lat), "Latitude in degrees")
         ("zoom,z", po::value(&zoom)->value_name("number")->default_value(zoom), "Zoom level")
         ("bearing,b", po::value(&bearing)->value_name("degrees")->default_value(bearing), "Bearing")
+        ("pitch,p", po::value(&pitch)->value_name("degrees")->default_value(pitch), "Pitch")
         ("width,w", po::value(&width)->value_name("pixels")->default_value(width), "Image width")
         ("height,h", po::value(&height)->value_name("pixels")->default_value(height), "Image height")
-        ("class,c", po::value(&classes)->value_name("name"), "Class name")
+        ("ratio,r", po::value(&pixelRatio)->value_name("number")->default_value(pixelRatio), "Image scale factor")
         ("token,t", po::value(&token)->value_name("key")->default_value(token), "Mapbox access token")
         ("debug", po::bool_switch(&debug)->default_value(debug), "Debug mode")
         ("output,o", po::value(&output)->value_name("file")->default_value(output), "Output file name")
@@ -60,8 +66,6 @@ int main(int argc, char *argv[]) {
         std::cout << "Error: " << e.what() << std::endl << desc;
         exit(1);
     }
-
-    std::string style = mbgl::util::read_file(style_path);
 
     using namespace mbgl;
 
@@ -81,20 +85,28 @@ int main(int argc, char *argv[]) {
         fileSource.setAccessToken(std::string(token));
     }
 
-    HeadlessView view(pixelRatio, width, height);
-    Map map(view, fileSource, MapMode::Still);
+    HeadlessBackend backend;
+    BackendScope scope { backend };
+    OffscreenView view(backend.getContext(), { static_cast<uint32_t>(width * pixelRatio),
+                                               static_cast<uint32_t>(height * pixelRatio) });
+    ThreadPool threadPool(4);
+    AsyncRendererFrontend rendererFrontend(std::make_unique<Renderer>(backend, pixelRatio, fileSource, threadPool), view);
+    Map map(rendererFrontend, MapObserver::nullObserver(), mbgl::Size { width, height }, pixelRatio, fileSource, threadPool, MapMode::Still);
 
-    map.setStyleJSON(style, ".");
-    map.setClasses(classes);
+    if (style_path.find("://") == std::string::npos) {
+        style_path = std::string("file://") + style_path;
+    }
 
+    map.getStyle().loadURL(style_path);
     map.setLatLngZoom({ lat, lon }, zoom);
     map.setBearing(bearing);
+    map.setPitch(pitch);
 
     if (debug) {
         map.setDebug(debug ? mbgl::MapDebugOptions::TileBorders | mbgl::MapDebugOptions::ParseStatus : mbgl::MapDebugOptions::NoDebug);
     }
 
-    map.renderStill([&](std::exception_ptr error, PremultipliedImage&& image) {
+    map.renderStill([&](std::exception_ptr error) {
         try {
             if (error) {
                 std::rethrow_exception(error);
@@ -104,7 +116,9 @@ int main(int argc, char *argv[]) {
             exit(1);
         }
 
-        util::write_file(output, encodePNG(image));
+        std::ofstream out(output, std::ios::binary);
+        out << encodePNG(view.readStillImage());
+        out.close();
         loop.stop();
     });
 

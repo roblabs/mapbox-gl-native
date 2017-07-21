@@ -5,28 +5,21 @@
 #include <nan.h>
 #pragma GCC diagnostic pop
 
-#include "node_mapbox_gl_native.hpp"
+#include <mbgl/util/run_loop.hpp>
+
 #include "node_map.hpp"
-#include "node_log.hpp"
+#include "node_logging.hpp"
 #include "node_request.hpp"
 
-namespace node_mbgl {
-
-mbgl::util::RunLoop& NodeRunLoop() {
-    static mbgl::util::RunLoop nodeRunLoop;
-    return nodeRunLoop;
-}
-
-}
-
-NAN_MODULE_INIT(RegisterModule) {
+void RegisterModule(v8::Local<v8::Object> target, v8::Local<v8::Object> module) {
     // This has the effect of:
     //   a) Ensuring that the static local variable is initialized before any thread contention.
     //   b) unreffing an async handle, which otherwise would keep the default loop running.
-    node_mbgl::NodeRunLoop().stop();
+    static mbgl::util::RunLoop nodeRunLoop;
+    nodeRunLoop.stop();
 
     node_mbgl::NodeMap::Init(target);
-    node_mbgl::NodeRequest::Init(target);
+    node_mbgl::NodeRequest::Init();
 
     // Exports Resource constants.
     v8::Local<v8::Object> resource = Nan::New<v8::Object>();
@@ -63,18 +56,25 @@ NAN_MODULE_INIT(RegisterModule) {
         Nan::New("Resource").ToLocalChecked(),
         resource);
 
-    // Make the exported object inherit from process.EventEmitter
-    v8::Local<v8::Object> process = Nan::Get(
-        Nan::GetCurrentContext()->Global(),
-        Nan::New("process").ToLocalChecked()).ToLocalChecked()->ToObject();
+    // Make the exported object inherit from EventEmitter
+    v8::Local<v8::Function> require = Nan::Get(module,
+        Nan::New("require").ToLocalChecked()).ToLocalChecked().As<v8::Function>();
 
-    v8::Local<v8::Object> EventEmitter = Nan::Get(process,
-        Nan::New("EventEmitter").ToLocalChecked()).ToLocalChecked()->ToObject();
+    v8::Local<v8::Value> eventsString = Nan::New("events").ToLocalChecked();
+    v8::Local<v8::Object> events = Nan::To<v8::Object>(Nan::Call(require, module, 1, &eventsString).ToLocalChecked()).ToLocalChecked();
+
+    v8::Local<v8::Object> EventEmitter = Nan::To<v8::Object>(
+        Nan::Get(
+            events,
+            Nan::New("EventEmitter").ToLocalChecked()
+        ).ToLocalChecked()
+    ).ToLocalChecked();
 
     Nan::SetPrototype(target,
         Nan::Get(EventEmitter, Nan::New("prototype").ToLocalChecked()).ToLocalChecked());
+    Nan::CallAsFunction(EventEmitter, target, 0, nullptr);
 
-    mbgl::Log::setObserver(std::make_unique<node_mbgl::NodeLogObserver>(target->ToObject()));
+    mbgl::Log::setObserver(std::make_unique<node_mbgl::NodeLogObserver>(target));
 }
 
 NODE_MODULE(mapbox_gl_native, RegisterModule)

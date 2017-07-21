@@ -1,10 +1,11 @@
 #include <mbgl/sprite/sprite_parser.hpp>
-#include <mbgl/sprite/sprite_image.hpp>
+#include <mbgl/style/image.hpp>
 
-#include <mbgl/platform/log.hpp>
+#include <mbgl/util/logging.hpp>
 
 #include <mbgl/util/image.hpp>
 #include <mbgl/util/rapidjson.hpp>
+#include <mbgl/util/string.hpp>
 
 #include <cmath>
 #include <limits>
@@ -12,45 +13,37 @@
 
 namespace mbgl {
 
-SpriteImagePtr createSpriteImage(const PremultipliedImage& image,
-                                 const uint16_t srcX,
-                                 const uint16_t srcY,
-                                 const uint16_t width,
-                                 const uint16_t height,
-                                 const double ratio,
-                                 const bool sdf) {
+std::unique_ptr<style::Image> createStyleImage(const std::string& id,
+                                               const PremultipliedImage& image,
+                                               const uint32_t srcX,
+                                               const uint32_t srcY,
+                                               const uint32_t width,
+                                               const uint32_t height,
+                                               const double ratio,
+                                               const bool sdf) {
     // Disallow invalid parameter configurations.
-    if (width == 0 || height == 0 || ratio <= 0 || ratio > 10 || width > 1024 ||
-        height > 1024) {
-        Log::Warning(Event::Sprite, "Can't create sprite with invalid metrics");
+    if (width <= 0 || height <= 0 || width > 1024 || height > 1024 ||
+        ratio <= 0 || ratio > 10 ||
+        srcX >= image.size.width || srcY >= image.size.height ||
+        srcX + width > image.size.width || srcY + height > image.size.height) {
+        Log::Error(Event::Sprite, "Can't create sprite with invalid metrics: %ux%u@%u,%u in %ux%u@%sx sprite",
+            width, height, srcX, srcY,
+            image.size.width, image.size.height,
+            util::toString(ratio).c_str());
         return nullptr;
     }
 
-    PremultipliedImage dstImage(width, height);
-
-    auto srcData = reinterpret_cast<const uint32_t*>(image.data.get());
-    auto dstData = reinterpret_cast<uint32_t*>(dstImage.data.get());
-
-    const int32_t maxX = std::min(uint32_t(image.width), uint32_t(width + srcX)) - srcX;
-    assert(maxX <= int32_t(image.width));
-    const int32_t maxY = std::min(uint32_t(image.height), uint32_t(height + srcY)) - srcY;
-    assert(maxY <= int32_t(image.height));
+    PremultipliedImage dstImage({ width, height });
 
     // Copy from the source image into our individual sprite image
-    for (uint16_t y = 0; y < maxY; ++y) {
-        const auto dstRow = y * width;
-        const auto srcRow = (y + srcY) * image.width + srcX;
-        for (uint16_t x = 0; x < maxX; ++x) {
-            dstData[dstRow + x] = srcData[srcRow + x];
-        }
-    }
+    PremultipliedImage::copy(image, dstImage, { srcX, srcY }, { 0, 0 }, { width, height });
 
-    return std::make_unique<const SpriteImage>(std::move(dstImage), ratio, sdf);
+    return std::make_unique<style::Image>(id, std::move(dstImage), ratio, sdf);
 }
 
 namespace {
 
-inline uint16_t getUInt16(const JSValue& value, const char* name, const uint16_t def = 0) {
+uint16_t getUInt16(const JSValue& value, const char* name, const uint16_t def = 0) {
     if (value.HasMember(name)) {
         auto& v = value[name];
         if (v.IsUint() && v.GetUint() <= std::numeric_limits<uint16_t>::max()) {
@@ -64,7 +57,7 @@ inline uint16_t getUInt16(const JSValue& value, const char* name, const uint16_t
     return def;
 }
 
-inline double getDouble(const JSValue& value, const char* name, const double def = 0) {
+double getDouble(const JSValue& value, const char* name, const double def = 0) {
     if (value.HasMember(name)) {
         auto& v = value[name];
         if (v.IsNumber()) {
@@ -77,7 +70,7 @@ inline double getDouble(const JSValue& value, const char* name, const double def
     return def;
 }
 
-inline bool getBoolean(const JSValue& value, const char* name, const bool def = false) {
+bool getBoolean(const JSValue& value, const char* name, const bool def = false) {
     if (value.HasMember(name)) {
         auto& v = value[name];
         if (v.IsBool()) {
@@ -92,29 +85,22 @@ inline bool getBoolean(const JSValue& value, const char* name, const bool def = 
 
 } // namespace
 
-SpriteParseResult parseSprite(const std::string& image, const std::string& json) {
-    Sprites sprites;
-    PremultipliedImage raster;
-
-    try {
-        raster = decodeImage(image);
-    } catch (...) {
-        return std::current_exception();
-    }
+std::vector<std::unique_ptr<style::Image>> parseSprite(const std::string& encodedImage, const std::string& json) {
+    const PremultipliedImage raster = decodeImage(encodedImage);
 
     JSDocument doc;
     doc.Parse<0>(json.c_str());
-
     if (doc.HasParseError()) {
         std::stringstream message;
         message << "Failed to parse JSON: " << rapidjson::GetParseError_En(doc.GetParseError()) << " at offset " << doc.GetErrorOffset();
-        return std::make_exception_ptr(std::runtime_error(message.str()));
+        throw std::runtime_error(message.str());
     } else if (!doc.IsObject()) {
-        return std::make_exception_ptr(std::runtime_error("Sprite JSON root must be an object"));
+        throw std::runtime_error("Sprite JSON root must be an object");
     } else {
-        for (JSValue::ConstMemberIterator itr = doc.MemberBegin(); itr != doc.MemberEnd(); ++itr) {
-            const std::string name = { itr->name.GetString(), itr->name.GetStringLength() };
-            const JSValue& value = itr->value;
+        std::vector<std::unique_ptr<style::Image>> images;
+        for (const auto& property : doc.GetObject()) {
+            const std::string name = { property.name.GetString(), property.name.GetStringLength() };
+            const JSValue& value = property.value;
 
             if (value.IsObject()) {
                 const uint16_t x = getUInt16(value, "x", 0);
@@ -124,15 +110,14 @@ SpriteParseResult parseSprite(const std::string& image, const std::string& json)
                 const double pixelRatio = getDouble(value, "pixelRatio", 1);
                 const bool sdf = getBoolean(value, "sdf", false);
 
-                auto sprite = createSpriteImage(raster, x, y, width, height, pixelRatio, sdf);
-                if (sprite) {
-                    sprites.emplace(name, sprite);
+                auto image = createStyleImage(name, raster, x, y, width, height, pixelRatio, sdf);
+                if (image) {
+                    images.push_back(std::move(image));
                 }
             }
         }
+        return images;
     }
-
-    return sprites;
 }
 
 } // namespace mbgl

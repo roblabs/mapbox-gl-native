@@ -1,29 +1,31 @@
-#ifndef MBGL_UTIL_MAPBOX
-#define MBGL_UTIL_MAPBOX
+#pragma once
 
 #include <string>
 #include <mbgl/style/types.hpp>
 
 namespace mbgl {
+
+class Tileset;
+
 namespace util {
 namespace mapbox {
 
 bool isMapboxURL(const std::string& url);
 
-std::string normalizeSourceURL(const std::string& url, const std::string& accessToken);
-std::string normalizeStyleURL(const std::string& url, const std::string& accessToken);
-std::string normalizeSpriteURL(const std::string& url, const std::string& accessToken);
-std::string normalizeGlyphsURL(const std::string& url, const std::string& accessToken);
-std::string normalizeRasterTileURL(const std::string& url);
+std::string normalizeSourceURL(const std::string& baseURL, const std::string& url, const std::string& accessToken);
+std::string normalizeStyleURL(const std::string& baseURL, const std::string& url, const std::string& accessToken);
+std::string normalizeSpriteURL(const std::string& baseURL, const std::string& url, const std::string& accessToken);
+std::string normalizeGlyphsURL(const std::string& baseURL, const std::string& url, const std::string& accessToken);
+std::string normalizeTileURL(const std::string& baseURL, const std::string& url, const std::string& accessToken);
 
-// Canonicalizes Mapbox URLs by removing [a-d] subdomain prefixes, access tokens, and protocol.
-// Note that this is close, but not exactly the reverse operation as above, as this retains certain
-// information, such as the API version. It is used to cache resources retrieved from the URL, that
-// sometimes have multiple valid URLs.
-std::string canonicalURL(const std::string &url);
+// Return a "mapbox://tiles/..." URL (suitable for normalizeTileURL) for the given Mapbox tile URL.
+std::string canonicalizeTileURL(const std::string& url, SourceType, uint16_t tileSize);
+
+// Replace URL templates with "mapbox://tiles/..." URLs (suitable for normalizeTileURL).
+void canonicalizeTileset(Tileset&, const std::string& url, SourceType, uint16_t tileSize);
+
+extern const uint64_t DEFAULT_OFFLINE_TILE_COUNT_LIMIT;
 
 } // namespace mapbox
 } // namespace util
 } // namespace mbgl
-
-#endif

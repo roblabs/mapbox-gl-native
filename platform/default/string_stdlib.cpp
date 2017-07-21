@@ -1,27 +1,27 @@
-#include <mbgl/platform/platform.hpp>
-#include <mbgl/util/utf.hpp>
+#include <mbgl/util/platform.hpp>
 #define NU_WITH_TOUPPER
 #define NU_WITH_TOLOWER
 #define NU_WITH_UTF8_WRITER
 #include <libnu/libnu.h>
 #include <cstring>
+#include <sstream>
 
 namespace mbgl { namespace platform {
 
 std::string uppercase(const std::string& str)
 {
     std::stringstream output;
-    char const *itr = str.c_str(), *nitr = itr;
+    char const *itr = str.c_str(), *nitr;
     char const *end = itr + str.length();
     char lo[5] = { 0 };
 
     for (; itr < end; itr = nitr)
     {
         uint32_t code_point = 0;
-        char const* buf = 0;
+        char const* buf = nullptr;
 
-        nitr = _nu_toupper(itr, end, nu_utf8_read, &code_point, &buf, 0);
-        if (buf != 0)
+        nitr = _nu_toupper(itr, end, nu_utf8_read, &code_point, &buf, nullptr);
+        if (buf != nullptr)
         {
             do
             {
@@ -44,17 +44,17 @@ std::string uppercase(const std::string& str)
 std::string lowercase(const std::string& str)
 {
     std::stringstream output;
-    char const *itr = str.c_str(), *nitr = itr;
+    char const *itr = str.c_str(), *nitr;
     char const *end = itr + str.length();
     char lo[5] = { 0 };
 
     for (; itr < end; itr = nitr)
     {
         uint32_t code_point = 0;
-        char const* buf = 0;
+        char const* buf = nullptr;
 
-        nitr = _nu_tolower(itr, end, nu_utf8_read, &code_point, &buf, 0);
-        if (buf != 0)
+        nitr = _nu_tolower(itr, end, nu_utf8_read, &code_point, &buf, nullptr);
+        if (buf != nullptr)
         {
             do
             {
@@ -73,4 +73,5 @@ std::string lowercase(const std::string& str)
     return output.str();
 }
 
-}}
+} // namespace platform
+} // namespace mbgl

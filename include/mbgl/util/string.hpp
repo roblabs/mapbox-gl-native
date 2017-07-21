@@ -1,28 +1,36 @@
-#ifndef MBGL_UTIL_STRING
-#define MBGL_UTIL_STRING
+#pragma once
 
 #include <string>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunknown-pragmas"
-#pragma GCC diagnostic ignored "-Wunused-local-typedefs"
-#include <boost/lexical_cast.hpp>
-#pragma GCC diagnostic pop
+#include <cassert>
+#include <exception>
 
 namespace mbgl {
 namespace util {
 
-template <typename... Args>
-inline std::string toString(Args&&... args) {
-    return boost::lexical_cast<std::string>(::std::forward<Args>(args)...);
+template <class T>
+inline std::string toString(T t) {
+    return std::to_string(t);
 }
 
-// boost::lexical_cast() treats this as a character, but we are using it as number types.
 inline std::string toString(int8_t num) {
-    return boost::lexical_cast<std::string>(int(num));
+    return std::to_string(int(num));
 }
+
+inline std::string toString(uint8_t num) {
+    return std::to_string(unsigned(num));
+}
+
+std::string toString(float);
+std::string toString(double);
+std::string toString(long double);
 
 inline std::string toString(std::exception_ptr error) {
+    assert(error);
+
+    if (!error) {
+        return "(null)";
+    }
+
     try {
         std::rethrow_exception(error);
     } catch (const std::exception& ex) {
@@ -32,19 +40,5 @@ inline std::string toString(std::exception_ptr error) {
     }
 }
 
-template<size_t max, typename... Args>
-inline std::string sprintf(const char *msg, Args... args) {
-    char res[max];
-    int len = snprintf(res, sizeof(res), msg, args...);
-    return std::string(res, len);
-}
-
-template<size_t max, typename... Args>
-inline std::string sprintf(const std::string &msg, Args... args) {
-    return sprintf<max>(msg.c_str(), args...);
-}
-
 } // namespace util
 } // namespace mbgl
-
-#endif

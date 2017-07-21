@@ -1,46 +1,55 @@
-#ifndef MBGL_GEOMETRY_LINE_ATLAS
-#define MBGL_GEOMETRY_LINE_ATLAS
+#pragma once
 
-#include <mbgl/platform/gl.hpp>
+#include <mbgl/gl/texture.hpp>
+#include <mbgl/gl/object.hpp>
+#include <mbgl/util/image.hpp>
+#include <mbgl/util/optional.hpp>
 
 #include <vector>
-#include <map>
+#include <unordered_map>
 #include <memory>
 
 namespace mbgl {
 
-typedef struct {
+namespace gl {
+class Context;
+} // namespace gl
+
+class LinePatternPos {
+public:
     float width;
     float height;
     float y;
-} LinePatternPos;
+};
+
+enum class LinePatternCap : bool {
+    Square = false,
+    Round = true,
+};
 
 class LineAtlas {
 public:
-    LineAtlas(GLsizei width, GLsizei height);
+    LineAtlas(Size);
     ~LineAtlas();
 
     // Binds the atlas texture to the GPU, and uploads data if it is out of date.
-    void bind();
+    void bind(gl::Context&, gl::TextureUnit unit);
 
     // Uploads the texture to the GPU to be available when we need it. This is a lazy operation;
     // the texture is only bound when the data is out of date (=dirty).
-    void upload();
+    void upload(gl::Context&, gl::TextureUnit unit);
 
-    LinePatternPos getDashPosition(const std::vector<float>&, bool);
-    LinePatternPos addDash(const std::vector<float> &dasharray, bool round);
+    LinePatternPos getDashPosition(const std::vector<float>&, LinePatternCap);
+    LinePatternPos addDash(const std::vector<float>& dasharray, LinePatternCap);
 
-    const GLsizei width;
-    const GLsizei height;
+    Size getSize() const;
 
 private:
-    const std::unique_ptr<GLbyte[]> data;
+    const AlphaImage image;
     bool dirty;
-    GLuint texture = 0;
-    int nextRow = 0;
-    std::map<size_t, LinePatternPos> positions;
+    mbgl::optional<gl::Texture> texture;
+    uint32_t nextRow = 0;
+    std::unordered_map<size_t, LinePatternPos> positions;
 };
 
 } // namespace mbgl
-
-#endif

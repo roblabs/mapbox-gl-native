@@ -1,171 +1,235 @@
 #include <mbgl/annotation/annotation_manager.hpp>
+#include <mbgl/annotation/annotation_source.hpp>
 #include <mbgl/annotation/annotation_tile.hpp>
+#include <mbgl/annotation/symbol_annotation_impl.hpp>
+#include <mbgl/annotation/line_annotation_impl.hpp>
+#include <mbgl/annotation/fill_annotation_impl.hpp>
 #include <mbgl/style/style.hpp>
-#include <mbgl/layer/symbol_layer.hpp>
+#include <mbgl/style/style_impl.hpp>
+#include <mbgl/style/layers/symbol_layer.hpp>
+#include <mbgl/style/layers/symbol_layer_impl.hpp>
+#include <mbgl/storage/file_source.hpp>
 
 #include <boost/function_output_iterator.hpp>
 
 namespace mbgl {
 
+using namespace style;
+
 const std::string AnnotationManager::SourceID = "com.mapbox.annotations";
 const std::string AnnotationManager::PointLayerID = "com.mapbox.annotations.points";
 
-AnnotationManager::AnnotationManager(float pixelRatio)
-    : spriteStore(pixelRatio),
-      spriteAtlas(512, 512, pixelRatio, spriteStore) {
-}
+AnnotationManager::AnnotationManager(Style& style_)
+        : style(style_) {
+};
 
 AnnotationManager::~AnnotationManager() = default;
 
-AnnotationIDs
-AnnotationManager::addPointAnnotations(const std::vector<PointAnnotation>& points, const uint8_t) {
-    AnnotationIDs annotationIDs;
-    annotationIDs.reserve(points.size());
-
-    for (const auto& point : points) {
-        const uint32_t annotationID = nextID++;
-        auto annotation = std::make_shared<PointAnnotationImpl>(annotationID, point);
-        pointTree.insert(annotation);
-        pointAnnotations.emplace(annotationID, annotation);
-        annotationIDs.push_back(annotationID);
-    }
-
-    return annotationIDs;
+void AnnotationManager::setStyle(Style& style_) {
+    style = style_;
 }
 
-AnnotationIDs
-AnnotationManager::addShapeAnnotations(const std::vector<ShapeAnnotation>& shapes, const uint8_t maxZoom) {
-    AnnotationIDs annotationIDs;
-    annotationIDs.reserve(shapes.size());
-
-    for (const auto& shape : shapes) {
-        const uint32_t annotationID = nextID++;
-        shapeAnnotations.emplace(annotationID,
-            std::make_unique<ShapeAnnotationImpl>(annotationID, shape, maxZoom));
-        annotationIDs.push_back(annotationID);
-    }
-
-    return annotationIDs;
+void AnnotationManager::onStyleLoaded() {
+    updateStyle();
 }
 
-void AnnotationManager::removeAnnotations(const AnnotationIDs& ids) {
-    for (const auto& id : ids) {
-        if (pointAnnotations.find(id) != pointAnnotations.end()) {
-            pointTree.remove(pointAnnotations.at(id));
-            pointAnnotations.erase(id);
-        } else if (shapeAnnotations.find(id) != shapeAnnotations.end()) {
-            obsoleteShapeAnnotationLayers.push_back(shapeAnnotations.at(id)->layerID);
-            shapeAnnotations.erase(id);
-        }
-    }
+AnnotationID AnnotationManager::addAnnotation(const Annotation& annotation, const uint8_t maxZoom) {
+    std::lock_guard<std::mutex> lock(mutex);
+    AnnotationID id = nextID++;
+    Annotation::visit(annotation, [&] (const auto& annotation_) {
+        this->add(id, annotation_, maxZoom);
+    });
+    return id;
 }
 
-AnnotationIDs AnnotationManager::getPointAnnotationsInBounds(const LatLngBounds& bounds) const {
-    AnnotationIDs result;
+Update AnnotationManager::updateAnnotation(const AnnotationID& id, const Annotation& annotation, const uint8_t maxZoom) {
+    std::lock_guard<std::mutex> lock(mutex);
+    return Annotation::visit(annotation, [&] (const auto& annotation_) {
+        return this->update(id, annotation_, maxZoom);
+    });
+}
 
-    pointTree.query(boost::geometry::index::intersects(bounds),
-        boost::make_function_output_iterator([&](const auto& val){
-            result.push_back(val->id);
-        }));
+void AnnotationManager::removeAnnotation(const AnnotationID& id) {
+    std::lock_guard<std::mutex> lock(mutex);
+    remove(id);
+}
+
+void AnnotationManager::add(const AnnotationID& id, const SymbolAnnotation& annotation, const uint8_t) {
+    auto impl = std::make_shared<SymbolAnnotationImpl>(id, annotation);
+    symbolTree.insert(impl);
+    symbolAnnotations.emplace(id, impl);
+}
+
+void AnnotationManager::add(const AnnotationID& id, const LineAnnotation& annotation, const uint8_t maxZoom) {
+    ShapeAnnotationImpl& impl = *shapeAnnotations.emplace(id,
+        std::make_unique<LineAnnotationImpl>(id, annotation, maxZoom)).first->second;
+    impl.updateStyle(*style.get().impl);
+}
+
+void AnnotationManager::add(const AnnotationID& id, const FillAnnotation& annotation, const uint8_t maxZoom) {
+    ShapeAnnotationImpl& impl = *shapeAnnotations.emplace(id,
+        std::make_unique<FillAnnotationImpl>(id, annotation, maxZoom)).first->second;
+    impl.updateStyle(*style.get().impl);
+}
+
+Update AnnotationManager::update(const AnnotationID& id, const SymbolAnnotation& annotation, const uint8_t maxZoom) {
+    Update result = Update::Nothing;
+
+    auto it = symbolAnnotations.find(id);
+    if (it == symbolAnnotations.end()) {
+        assert(false); // Attempt to update a non-existent symbol annotation
+        return result;
+    }
+
+    const SymbolAnnotation& existing = it->second->annotation;
+
+    if (existing.geometry != annotation.geometry || existing.icon != annotation.icon) {
+        result |= Update::AnnotationData;
+
+        remove(id);
+        add(id, annotation, maxZoom);
+    }
 
     return result;
 }
 
-LatLngBounds AnnotationManager::getBoundsForAnnotations(const AnnotationIDs& ids) const {
-    LatLngBounds result = LatLngBounds::getExtendable();
-
-    for (const auto& id : ids) {
-        if (pointAnnotations.find(id) != pointAnnotations.end()) {
-            result.extend(pointAnnotations.at(id)->bounds());
-        } else if (shapeAnnotations.find(id) != shapeAnnotations.end()) {
-            result.extend(shapeAnnotations.at(id)->bounds());
-        }
+Update AnnotationManager::update(const AnnotationID& id, const LineAnnotation& annotation, const uint8_t maxZoom) {
+    auto it = shapeAnnotations.find(id);
+    if (it == shapeAnnotations.end()) {
+        assert(false); // Attempt to update a non-existent shape annotation
+        return Update::Nothing;
     }
 
-    return result;
+    shapeAnnotations.erase(it);
+    add(id, annotation, maxZoom);
+    return Update::AnnotationData;
 }
 
-std::unique_ptr<AnnotationTile> AnnotationManager::getTile(const TileID& tileID) {
-    if (pointAnnotations.empty() && shapeAnnotations.empty())
+Update AnnotationManager::update(const AnnotationID& id, const FillAnnotation& annotation, const uint8_t maxZoom) {
+    auto it = shapeAnnotations.find(id);
+    if (it == shapeAnnotations.end()) {
+        assert(false); // Attempt to update a non-existent shape annotation
+        return Update::Nothing;
+    }
+
+    shapeAnnotations.erase(it);
+    add(id, annotation, maxZoom);
+    return Update::AnnotationData;
+}
+
+void AnnotationManager::remove(const AnnotationID& id) {
+    if (symbolAnnotations.find(id) != symbolAnnotations.end()) {
+        symbolTree.remove(symbolAnnotations.at(id));
+        symbolAnnotations.erase(id);
+    } else if (shapeAnnotations.find(id) != shapeAnnotations.end()) {
+        auto it = shapeAnnotations.find(id);
+        *style.get().impl->removeLayer(it->second->layerID);
+        shapeAnnotations.erase(it);
+    } else {
+        assert(false); // Should never happen
+    }
+}
+
+std::unique_ptr<AnnotationTileData> AnnotationManager::getTileData(const CanonicalTileID& tileID) {
+    if (symbolAnnotations.empty() && shapeAnnotations.empty())
         return nullptr;
 
-    auto tile = std::make_unique<AnnotationTile>();
+    auto tileData = std::make_unique<AnnotationTileData>();
 
-    AnnotationTileLayer& pointLayer = *tile->layers.emplace(
-        PointLayerID,
-        std::make_unique<AnnotationTileLayer>()).first->second;
+    auto pointLayer = tileData->addLayer(PointLayerID);
 
     LatLngBounds tileBounds(tileID);
 
-    pointTree.query(boost::geometry::index::intersects(tileBounds),
+    symbolTree.query(boost::geometry::index::intersects(tileBounds),
         boost::make_function_output_iterator([&](const auto& val){
-            val->updateLayer(tileID, pointLayer);
+            val->updateLayer(tileID, *pointLayer);
         }));
 
     for (const auto& shape : shapeAnnotations) {
-        shape.second->updateTile(tileID, *tile);
+        shape.second->updateTileData(tileID, *tileData);
     }
 
-    return tile;
+    return tileData;
 }
 
-void AnnotationManager::updateStyle(Style& style) {
-    // Create annotation source, point layer, and point bucket
-    if (!style.getSource(SourceID)) {
-        std::unique_ptr<Source> source = std::make_unique<Source>(SourceType::Annotations, SourceID, "", util::tileSize, std::make_unique<SourceInfo>(), nullptr);
-        source->enabled = true;
-        style.addSource(std::move(source));
+void AnnotationManager::updateStyle() {
+    // Create annotation source, point layer, and point bucket. We do everything via Style::Impl
+    // because we don't want annotation mutations to trigger Style::Impl::styleMutated to be set.
+    if (!style.get().impl->getSource(SourceID)) {
+        style.get().impl->addSource(std::make_unique<AnnotationSource>());
 
-        std::unique_ptr<SymbolLayer> layer = std::make_unique<SymbolLayer>();
-        layer->id = PointLayerID;
-        layer->source = SourceID;
-        layer->sourceLayer = PointLayerID;
-        layer->layout.icon.image = std::string("{sprite}");
-        layer->layout.icon.allowOverlap = true;
-        layer->spriteAtlas = &spriteAtlas;
+        std::unique_ptr<SymbolLayer> layer = std::make_unique<SymbolLayer>(PointLayerID, SourceID);
 
-        style.addLayer(std::move(layer));
+        layer->setSourceLayer(PointLayerID);
+        layer->setIconImage({SourceID + ".{sprite}"});
+        layer->setIconAllowOverlap(true);
+        layer->setIconIgnorePlacement(true);
+
+        style.get().impl->addLayer(std::move(layer));
     }
+
+    std::lock_guard<std::mutex> lock(mutex);
 
     for (const auto& shape : shapeAnnotations) {
-        shape.second->updateStyle(style);
+        shape.second->updateStyle(*style.get().impl);
     }
 
-    for (const auto& layer : obsoleteShapeAnnotationLayers) {
-        if (style.getLayer(layer)) {
-            style.removeLayer(layer);
-        }
-    }
-
-    obsoleteShapeAnnotationLayers.clear();
-
-    for (auto& monitor : monitors) {
-        monitor->update(getTile(monitor->tileID));
+    for (const auto& image : images) {
+        // Call addImage even for images we may have previously added, because we must support
+        // addAnnotationImage being used to update an existing image. Creating a new image is
+        // relatively cheap, as it copies only the Immutable reference. (We can't keep track
+        // of which images need to be added because we don't know if the style is the same
+        // instance as in the last updateStyle call. If it's a new style, we need to add all
+        // images.)
+        style.get().impl->addImage(std::make_unique<style::Image>(image.second));
     }
 }
 
-void AnnotationManager::addTileMonitor(AnnotationTileMonitor& monitor) {
-    monitors.insert(&monitor);
-    monitor.update(getTile(monitor.tileID));
+void AnnotationManager::updateData() {
+    std::lock_guard<std::mutex> lock(mutex);
+    for (auto& tile : tiles) {
+        tile->setData(getTileData(tile->id.canonical));
+    }
 }
 
-void AnnotationManager::removeTileMonitor(AnnotationTileMonitor& monitor) {
-    monitors.erase(&monitor);
+void AnnotationManager::addTile(AnnotationTile& tile) {
+    std::lock_guard<std::mutex> lock(mutex);
+    tiles.insert(&tile);
+    tile.setData(getTileData(tile.id.canonical));
 }
 
-void AnnotationManager::addIcon(const std::string& name, std::shared_ptr<const SpriteImage> sprite) {
-    spriteStore.setSprite(name, sprite);
-    spriteAtlas.updateDirty();
-}
-    
-void AnnotationManager::removeIcon(const std::string& name) {
-    spriteStore.removeSprite(name);
-    spriteAtlas.updateDirty();
+void AnnotationManager::removeTile(AnnotationTile& tile) {
+    std::lock_guard<std::mutex> lock(mutex);
+    tiles.erase(&tile);
 }
 
-double AnnotationManager::getTopOffsetPixelsForIcon(const std::string& name) {
-    auto sprite = spriteStore.getSprite(name);
-    return sprite ? -(sprite->image.height / sprite->pixelRatio) / 2 : 0;
+// To ensure that annotation images do not collide with images from the style,
+// we prefix input image IDs with "com.mapbox.annotations".
+static std::string prefixedImageID(const std::string& id) {
+    return AnnotationManager::SourceID + "." + id;
+}
+
+void AnnotationManager::addImage(std::unique_ptr<style::Image> image) {
+    std::lock_guard<std::mutex> lock(mutex);
+    const std::string id = prefixedImageID(image->getID());
+    images.erase(id);
+    auto inserted = images.emplace(id, style::Image(id, image->getImage().clone(),
+                                                    image->getPixelRatio(), image->isSdf()));
+    style.get().impl->addImage(std::make_unique<style::Image>(inserted.first->second));
+}
+
+void AnnotationManager::removeImage(const std::string& id_) {
+    std::lock_guard<std::mutex> lock(mutex);
+    const std::string id = prefixedImageID(id_);
+    images.erase(id);
+    style.get().impl->removeImage(id);
+}
+
+double AnnotationManager::getTopOffsetPixelsForImage(const std::string& id_) {
+    std::lock_guard<std::mutex> lock(mutex);
+    const std::string id = prefixedImageID(id_);
+    auto it = images.find(id);
+    return it != images.end() ? -(it->second.getImage().size.height / it->second.getPixelRatio()) / 2 : 0;
 }
 
 } // namespace mbgl

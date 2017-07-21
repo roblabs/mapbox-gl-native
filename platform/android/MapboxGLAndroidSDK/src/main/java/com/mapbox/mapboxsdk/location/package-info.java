@@ -1,4 +1,4 @@
 /**
- * This package contains the Location Services API for accessing the location of the device.
+ * Contains the Mapbox Maps Android Location API classes.
  */
 package com.mapbox.mapboxsdk.location;

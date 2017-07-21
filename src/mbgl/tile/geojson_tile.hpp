@@ -1,78 +1,26 @@
-#ifndef MBGL_ANNOTATION_GEOJSON_VT_TILE
-#define MBGL_ANNOTATION_GEOJSON_VT_TILE
+#pragma once
 
-#include <mbgl/map/geometry_tile.hpp>
-#include <mbgl/map/tile_id.hpp>
-
-#include <unordered_map>
-
-namespace mapbox {
-namespace geojsonvt {
-class GeoJSONVT;
-} // namespace geojsonvt
-} // namespace mapbox
+#include <mbgl/tile/geometry_tile.hpp>
+#include <mbgl/util/feature.hpp>
 
 namespace mbgl {
 
-// Implements a simple in-memory Tile type that holds GeoJSON values. A GeoJSON tile can only have
-// one layer, and it is always returned regardless of which layer is requested.
-
-class GeoJSONTileFeature : public GeometryTileFeature {
-public:
-    using Tags = std::unordered_map<std::string, std::string>;
-
-    GeoJSONTileFeature(FeatureType, GeometryCollection&&, Tags&& = Tags{});
-    FeatureType getType() const override;
-    optional<Value> getValue(const std::string&) const override;
-    GeometryCollection getGeometries() const override;
-
-private:
-    const FeatureType type;
-    const GeometryCollection geometries;
-    const Tags tags;
-};
-
-class GeoJSONTileLayer : public GeometryTileLayer {
-public:
-    using Features = std::vector<std::shared_ptr<const GeoJSONTileFeature>>;
-
-    GeoJSONTileLayer(Features&&);
-    std::size_t featureCount() const override;
-    util::ptr<const GeometryTileFeature> getFeature(std::size_t) const override;
-
-private:
-    const Features features;
-};
+class TileParameters;
 
 class GeoJSONTile : public GeometryTile {
 public:
-    GeoJSONTile(std::shared_ptr<GeoJSONTileLayer>);
-    util::ptr<GeometryTileLayer> getLayer(const std::string&) const override;
+    GeoJSONTile(const OverscaledTileID&,
+                std::string sourceID,
+                const TileParameters&,
+                mapbox::geometry::feature_collection<int16_t>);
 
-private:
-    const std::shared_ptr<GeoJSONTileLayer> layer;
-};
+    void updateData(mapbox::geometry::feature_collection<int16_t>);
 
-class GeoJSONTileMonitor : public GeometryTileMonitor {
-public:
-    GeoJSONTileMonitor(mapbox::geojsonvt::GeoJSONVT*, const TileID&);
-    virtual ~GeoJSONTileMonitor();
-
-    std::unique_ptr<FileRequest> monitorTile(const GeometryTileMonitor::Callback&) override;
-
-    void setGeoJSONVT(mapbox::geojsonvt::GeoJSONVT*);
-
-private:
-    void update();
-
-public:
-    const TileID tileID;
-
-private:
-    mapbox::geojsonvt::GeoJSONVT* geojsonvt = nullptr;
-    GeometryTileMonitor::Callback callback;
+    void setNecessity(Necessity) final;
+    
+    void querySourceFeatures(
+        std::vector<Feature>& result,
+        const SourceQueryOptions&) override;
 };
 
 } // namespace mbgl
-
-#endif

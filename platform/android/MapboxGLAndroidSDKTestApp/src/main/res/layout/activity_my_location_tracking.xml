@@ -38,11 +38,13 @@
 
     </android.support.v7.widget.Toolbar>
 
-    <com.mapbox.mapboxsdk.views.MapView
+    <com.mapbox.mapboxsdk.maps.MapView
         android:id="@+id/mapView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:style_url="@string/style_mapbox_streets"
-        app:zoom="15" />
+        app:mapbox_myLocationTintColor="@color/primary"
+        app:mapbox_myLocationAccuracyTintColor="@color/primary"
+        app:mapbox_styleUrl="@string/mapbox_style_mapbox_streets"
+        app:mapbox_cameraZoom="8" />
 
 </LinearLayout>

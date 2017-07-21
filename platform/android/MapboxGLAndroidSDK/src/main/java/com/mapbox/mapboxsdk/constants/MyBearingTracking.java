@@ -2,42 +2,44 @@ package com.mapbox.mapboxsdk.constants;
 
 import android.support.annotation.IntDef;
 
-import com.mapbox.mapboxsdk.views.MapView;
+import com.mapbox.mapboxsdk.maps.MapboxMap;
+import com.mapbox.mapboxsdk.maps.widgets.MyLocationView;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /**
- * MyBearingTracking exposes different types bearing tracking modes.
+ * MyBearingTracking exposes different types of bearing tracking modes.
+ * <p>
+ * These modes visualise the user direction by extracting the direction from either sensor or location data.
+ * </p>
+ * <p>
+ * Required to enable showing the user location first through {@link MapboxMap#setMyLocationEnabled(boolean)}.
+ * </p>
  *
- * @see MapView#setMyBearingTrackingMode(int)
- * @see com.mapbox.mapboxsdk.views.UserLocationView#setMyBearingTrackingMode(int)
+ * @see com.mapbox.mapboxsdk.maps.TrackingSettings#setMyBearingTrackingMode(int)
+ * @see MyLocationView#setMyBearingTrackingMode(int)
  */
 public class MyBearingTracking {
 
-    /**
-     * Indicates the parameter accepts one of the values from {@link MyBearingTracking}.
-     */
-    @IntDef({NONE, COMPASS, GPS, /**COMBINED**/})
-    @Retention(RetentionPolicy.SOURCE)
-    public @interface Mode {
-    }
+  @IntDef( {NONE, COMPASS, GPS})
+  @Retention(RetentionPolicy.SOURCE)
+  public @interface Mode {
+  }
 
-    /**
-     * Bearing tracking is disabled
-     */
-    public static final int NONE = 0x00000000;
+  /**
+   * Bearing tracking is disabled
+   */
+  public static final int NONE = 0x00000000;
 
-    /**
-     * Tracking the bearing of the user based on sensor data
-     */
-    public static final int COMPASS = 0x00000004;
+  /**
+   * Tracking the bearing of the user based on sensor data
+   */
+  public static final int COMPASS = 0x00000004;
 
-    /**
-     * Tracking the bearing of the user based on GPS data
-     */
-    public static final int GPS = 0x00000008;
-
-    //public static final int COMBINED = 0x00000012;
+  /**
+   * Tracking the bearing of the user based on GPS data
+   */
+  public static final int GPS = 0x00000008;
 
 }

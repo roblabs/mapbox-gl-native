@@ -8,25 +8,42 @@
 
 #include <mbgl/storage/resource.hpp>
 #include <mbgl/storage/file_source.hpp>
+#include <mbgl/util/async_task.hpp>
+
+#include <memory>
 
 namespace node_mbgl {
 
-class NodeFileSource;
+class NodeMap;
 
-class NodeRequest : public Nan::ObjectWrap {
+class NodeRequest : public Nan::ObjectWrap,
+                    public Nan::AsyncWorker {
 public:
-    static NAN_MODULE_INIT(Init);
+    struct NodeAsyncRequest : public mbgl::AsyncRequest {
+        NodeAsyncRequest(NodeRequest*);
+        ~NodeAsyncRequest() override;
+        NodeRequest* request;
+    };
 
-    static NAN_METHOD(New);
-    static NAN_METHOD(Respond);
+    NodeRequest(NodeMap*, mbgl::FileSource::Callback);
+    ~NodeRequest();
 
-    static v8::Handle<v8::Object> Create(const mbgl::Resource&, mbgl::FileSource::Callback);
     static Nan::Persistent<v8::Function> constructor;
 
-    NodeRequest(mbgl::FileSource::Callback);
+    static void Init();
+
+    static void New(const Nan::FunctionCallbackInfo<v8::Value>&);
+    static void HandleCallback(const Nan::FunctionCallbackInfo<v8::Value>&);
+
+    void Execute();
 
 private:
+    void doExecute();
+
+    NodeMap* target;
     mbgl::FileSource::Callback callback;
+    NodeAsyncRequest* asyncRequest = nullptr;
+    std::unique_ptr<mbgl::util::AsyncTask> asyncExecute;
 };
 
 }

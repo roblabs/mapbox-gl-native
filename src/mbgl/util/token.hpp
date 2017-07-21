@@ -1,5 +1,4 @@
-#ifndef MBGL_UTIL_TOKEN
-#define MBGL_UTIL_TOKEN
+#pragma once
 
 #include <map>
 #include <string>
@@ -8,7 +7,7 @@
 namespace mbgl {
 namespace util {
 
-const static std::string tokenReservedChars = "{}()[]<>$=:;.,^";
+const static std::string tokenReservedChars = "{}";
 
 // Replaces {tokens} in a string by calling the lookup function.
 template <typename Lookup>
@@ -40,5 +39,3 @@ std::string replaceTokens(const std::string &source, const Lookup &lookup) {
 
 } // end namespace util
 } // end namespace mbgl
-
-#endif

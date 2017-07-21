@@ -1,34 +1,35 @@
 #include <mbgl/util/constants.hpp>
 
-const float mbgl::util::tileSize = 512.0f;
+#include <limits>
 
-const double mbgl::util::DEG2RAD = M_PI / 180.0;
-const double mbgl::util::RAD2DEG = 180.0 / M_PI;
-const double mbgl::util::M2PI = 2 * M_PI;
-const double mbgl::util::EARTH_RADIUS_M = 6378137;
-const double mbgl::util::LATITUDE_MAX = 85.05112878;
-const double mbgl::util::PITCH_MAX = M_PI / 3;
+namespace mbgl {
 
-#if defined(DEBUG)
-const bool mbgl::debug::tileParseWarnings = false;
-const bool mbgl::debug::styleParseWarnings = false;
-const bool mbgl::debug::spriteWarnings = false;
-const bool mbgl::debug::renderWarnings = false;
-const bool mbgl::debug::renderTree = false;
-const bool mbgl::debug::labelTextMissingWarning = true;
-const bool mbgl::debug::missingFontStackWarning = true;
-const bool mbgl::debug::missingFontFaceWarning = true;
-const bool mbgl::debug::glyphWarning = true;
-const bool mbgl::debug::shapingWarning = true;
+namespace debug {
+
+#ifndef NDEBUG
+const bool tileParseWarnings = false;
+const bool styleParseWarnings = false;
+const bool spriteWarnings = false;
+const bool renderWarnings = false;
+const bool renderTree = false;
+const bool labelTextMissingWarning = true;
+const bool missingFontStackWarning = true;
+const bool missingFontFaceWarning = true;
+const bool glyphWarning = true;
+const bool shapingWarning = true;
 #else
-const bool mbgl::debug::tileParseWarnings = false;
-const bool mbgl::debug::styleParseWarnings = false;
-const bool mbgl::debug::spriteWarnings = false;
-const bool mbgl::debug::renderWarnings = false;
-const bool mbgl::debug::renderTree = false;
-const bool mbgl::debug::labelTextMissingWarning = false;
-const bool mbgl::debug::missingFontStackWarning = false;
-const bool mbgl::debug::missingFontFaceWarning = false;
-const bool mbgl::debug::glyphWarning = false;
-const bool mbgl::debug::shapingWarning = false;
+const bool tileParseWarnings = false;
+const bool styleParseWarnings = false;
+const bool spriteWarnings = false;
+const bool renderWarnings = false;
+const bool renderTree = false;
+const bool labelTextMissingWarning = false;
+const bool missingFontStackWarning = false;
+const bool missingFontFaceWarning = false;
+const bool glyphWarning = false;
+const bool shapingWarning = false;
 #endif
+
+} // namespace debug
+
+} // namespace mbgl

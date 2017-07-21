@@ -11,43 +11,46 @@ Your journey will start with getting the source code, then installing the
 dependencies, and then setting up a development environment, which varies
 depending on your operating system and what platform you want to develop for.
 
-## 1: Getting the Source
+## 1: Getting the source
 
-Mapbox GL Native uses git submodules, so you'll need to initialize and update
-them after cloning the source from Git.
+Clone the git repository:
 
     git clone https://github.com/mapbox/mapbox-gl-native.git
     cd mapbox-gl-native
-    git submodule init
-    git submodule update
 
-Default styles in the [Mapbox GL Style Spec format](https://github.com/mapbox/mapbox-gl-style-spec) are included at `./styles` as a submodule. See the [styles project](https://github.com/mapbox/mapbox-gl-styles) to report problems or to contribute to these styles.
-
-## 2: Installing Dependencies
+## 2: Installing dependencies
 
 These dependencies are required for all operating systems and all platform
 targets.
 
- - Modern C++ compiler that supports `-std=c++14`
+ - Modern C++ compiler that supports `-std=c++14`\*
    - clang++ 3.5 or later _or_
    - g++-4.9 or later
- - Python 2.x (for build only)
+ - [CMake](https://cmake.org/) 3.1 or later (for build only)
+ - [cURL](https://curl.haxx.se) (for build only)
+ - [Node.js](https://nodejs.org/) 4.2.1 or later (for build only)
  - [`pkg-config`](https://wiki.freedesktop.org/www/Software/pkg-config/) (for build only)
- - [`libtool`](https://www.gnu.org/software/libtool/) (for build only)
- - [`automake`](https://www.gnu.org/software/automake/) (for build only)
+
+**Note**: We partially support C++14 because GCC 4.9 does not fully implement the
+final draft of the C++14 standard. More information in [DEVELOPING.md](DEVELOPING.md).
 
 Depending on your operating system and target, you'll need additional
 dependencies:
 
-### Additional Dependencies for Linux
+### Additional dependencies for Linux
 
  - [`libcurl`](http://curl.haxx.se/libcurl/) (depends on OpenSSL)
 
-### Additional Dependencies for OS X
+### Additional dependencies for macOS
 
- - Apple Command Line Tools (available at [Apple Developer](https://developer.apple.com/downloads))
+ - Apple Command Line Tools (available at [Apple Developer](https://developer.apple.com/download/more/))
  - [Homebrew](http://brew.sh)
  - [Cask](http://caskroom.io/) (if building for Android)
+ - [xcpretty](https://github.com/supermarin/xcpretty) (`gem install xcpretty`)
+
+### Optional dependencies
+
+- [ccache](https://ccache.samba.org) (for build only; improves recompilation performance)
 
 ## 3: Setting up a development environment & building
 
@@ -55,6 +58,11 @@ See the relevant SDK documentation for next steps:
 
 * [Mapbox Android SDK](platform/android/)
 * [Mapbox iOS SDK](platform/ios/)
-* [Mapbox OS X SDK](platform/osx/)
+* [Mapbox macOS SDK](platform/macos/)
+* [Mapbox Qt SDK](platform/qt/)
 * [Mapbox GL Native on Linux](platform/linux/)
 * [node-mapbox-gl-native](platform/node/)
+
+## 4: Keeping up to date
+
+This repository uses Git submodules, which should be automatically checked out when you first run a `make` command for one of the above platforms. These submodules are not updated automatically and we recommended that you run `git submodule update` after pulling down new commits to this repository.

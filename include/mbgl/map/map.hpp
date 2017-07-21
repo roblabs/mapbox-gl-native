@@ -1,15 +1,13 @@
-#ifndef MBGL_MAP_MAP
-#define MBGL_MAP_MAP
+#pragma once
 
+#include <mbgl/util/optional.hpp>
 #include <mbgl/util/chrono.hpp>
-#include <mbgl/util/image.hpp>
-#include <mbgl/map/update.hpp>
+#include <mbgl/map/map_observer.hpp>
 #include <mbgl/map/mode.hpp>
-#include <mbgl/util/geo.hpp>
 #include <mbgl/util/noncopyable.hpp>
-#include <mbgl/util/vec.hpp>
+#include <mbgl/util/size.hpp>
 #include <mbgl/annotation/annotation.hpp>
-#include <mbgl/style/types.hpp>
+#include <mbgl/map/camera.hpp>
 
 #include <cstdint>
 #include <string>
@@ -19,69 +17,42 @@
 
 namespace mbgl {
 
-class FileSource;
+class Backend;
 class View;
-class MapData;
-class MapContext;
-class SpriteImage;
-class Transform;
-class PointAnnotation;
-class ShapeAnnotation;
-struct CameraOptions;
-struct AnimationOptions;
+class FileSource;
+class Scheduler;
+class RendererFrontend;
 
-namespace util {
-template <class T> class Thread;
-} // namespace util
+namespace style {
+class Image;
+class Style;
+} // namespace style
 
 class Map : private util::noncopyable {
-    friend class View;
-
 public:
-    explicit Map(View&, FileSource&,
+    explicit Map(RendererFrontend&,
+                 MapObserver&,
+                 Size size,
+                 float pixelRatio,
+                 FileSource&,
+                 Scheduler&,
                  MapMode mapMode = MapMode::Continuous,
-                 GLContextMode contextMode = GLContextMode::Unique,
-                 ConstrainMode constrainMode = ConstrainMode::HeightOnly);
+                 ConstrainMode constrainMode = ConstrainMode::HeightOnly,
+                 ViewportMode viewportMode = ViewportMode::Default);
     ~Map();
-
-    // Pauses the render thread. The render thread will stop running but will not be terminated and will not lose state until resumed.
-    void pause();
-    bool isPaused();
-
-    // Resumes a paused render thread
-    void resume();
 
     // Register a callback that will get called (on the render thread) when all resources have
     // been loaded and a complete render occurs.
-    using StillImageCallback = std::function<void (std::exception_ptr, PremultipliedImage&&)>;
+    using StillImageCallback = std::function<void (std::exception_ptr)>;
     void renderStill(StillImageCallback callback);
 
-    // Triggers a synchronous render.
-    void renderSync();
+    // Triggers a repaint.
+    void triggerRepaint();
 
-    // Notifies the Map thread that the state has changed and an update might be necessary.
-    void update(Update update);
+          style::Style& getStyle();
+    const style::Style& getStyle() const;
 
-    // Styling
-    void addClass(const std::string&);
-    void removeClass(const std::string&);
-    bool hasClass(const std::string&) const;
-    void setClasses(const std::vector<std::string>&);
-    std::vector<std::string> getClasses() const;
-
-    void setDefaultFadeDuration(const Duration&);
-    Duration getDefaultFadeDuration() const;
-
-    void setDefaultTransitionDuration(const Duration&);
-    Duration getDefaultTransitionDuration() const;
-
-    void setDefaultTransitionDelay(const Duration&);
-    Duration getDefaultTransitionDelay() const;
-
-    void setStyleURL(const std::string& url);
-    void setStyleJSON(const std::string& json, const std::string& base = "");
-    std::string getStyleURL() const;
-    std::string getStyleJSON() const;
+    void setStyle(std::unique_ptr<style::Style>);
 
     // Transition
     void cancelTransitions();
@@ -92,92 +63,94 @@ public:
     bool isPanning() const;
 
     // Camera
+    CameraOptions getCameraOptions(const EdgeInsets&) const;
     void jumpTo(const CameraOptions&);
     void easeTo(const CameraOptions&, const AnimationOptions&);
     void flyTo(const CameraOptions&, const AnimationOptions&);
 
     // Position
-    void moveBy(const PrecisionPoint&, const Duration& = Duration::zero());
-    void setLatLng(const LatLng&, const PrecisionPoint&, const Duration& = Duration::zero());
-    void setLatLng(const LatLng&, const EdgeInsets&, const Duration& = Duration::zero());
-    void setLatLng(const LatLng&, const Duration& = Duration::zero());
+    void moveBy(const ScreenCoordinate&, const AnimationOptions& = {});
+    void setLatLng(const LatLng&, optional<ScreenCoordinate>, const AnimationOptions& = {});
+    void setLatLng(const LatLng&, const EdgeInsets&, const AnimationOptions& = {});
+    void setLatLng(const LatLng&, const AnimationOptions& = {});
     LatLng getLatLng(const EdgeInsets& = {}) const;
     void resetPosition(const EdgeInsets& = {});
 
-    // Scale
-    void scaleBy(double ds, const PrecisionPoint& = { NAN, NAN }, const Duration& = Duration::zero());
-    void setScale(double scale, const PrecisionPoint& = { NAN, NAN }, const Duration& = Duration::zero());
-    double getScale() const;
-    void setZoom(double zoom, const Duration& = Duration::zero());
-    void setZoom(double zoom, const EdgeInsets&, const Duration& = Duration::zero());
+    // Zoom
+    void setZoom(double zoom, const AnimationOptions& = {});
+    void setZoom(double zoom, optional<ScreenCoordinate>, const AnimationOptions& = {});
+    void setZoom(double zoom, const EdgeInsets&, const AnimationOptions& = {});
     double getZoom() const;
-    void setLatLngZoom(const LatLng&, double zoom, const Duration& = Duration::zero());
-    void setLatLngZoom(const LatLng&, double zoom, const EdgeInsets&, const Duration& = Duration::zero());
-    CameraOptions cameraForLatLngBounds(const LatLngBounds&, const EdgeInsets&);
-    CameraOptions cameraForLatLngs(const std::vector<LatLng>&, const EdgeInsets&);
+    void setLatLngZoom(const LatLng&, double zoom, const AnimationOptions& = {});
+    void setLatLngZoom(const LatLng&, double zoom, const EdgeInsets&, const AnimationOptions& = {});
+    CameraOptions cameraForLatLngBounds(const LatLngBounds&, const EdgeInsets&) const;
+    CameraOptions cameraForLatLngs(const std::vector<LatLng>&, const EdgeInsets&) const;
+    LatLngBounds latLngBoundsForCamera(const CameraOptions&) const;
     void resetZoom();
+
+    // Bounds
+    void setLatLngBounds(optional<LatLngBounds>);
+    optional<LatLngBounds> getLatLngBounds() const;
+    void setMinZoom(double);
     double getMinZoom() const;
+    void setMaxZoom(double);
     double getMaxZoom() const;
+    void setMinPitch(double);
+    double getMinPitch() const;
+    void setMaxPitch(double);
+    double getMaxPitch() const;
 
     // Rotation
-    void rotateBy(const PrecisionPoint& first, const PrecisionPoint& second, const Duration& = Duration::zero());
-    void setBearing(double degrees, const Duration& = Duration::zero());
-    void setBearing(double degrees, const PrecisionPoint&, const Duration& = Duration::zero());
-    void setBearing(double degrees, const EdgeInsets&, const Duration& = Duration::zero());
+    void rotateBy(const ScreenCoordinate& first, const ScreenCoordinate& second, const AnimationOptions& = {});
+    void setBearing(double degrees, const AnimationOptions& = {});
+    void setBearing(double degrees, optional<ScreenCoordinate>, const AnimationOptions& = {});
+    void setBearing(double degrees, const EdgeInsets&, const AnimationOptions& = {});
     double getBearing() const;
-    void resetNorth(const Duration& = std::chrono::milliseconds(500));
-    void resetNorth(const EdgeInsets&, const Duration& = std::chrono::milliseconds(500));
+    void resetNorth(const AnimationOptions& = {{mbgl::Milliseconds(500)}});
+    void resetNorth(const EdgeInsets&, const AnimationOptions& = {{mbgl::Milliseconds(500)}});
 
     // Pitch
-    void setPitch(double pitch, const Duration& = Duration::zero());
+    void setPitch(double pitch, const AnimationOptions& = {});
+    void setPitch(double pitch, optional<ScreenCoordinate>, const AnimationOptions& = {});
     double getPitch() const;
 
     // North Orientation
     void setNorthOrientation(NorthOrientation);
     NorthOrientation getNorthOrientation() const;
 
+    // Constrain mode
+    void setConstrainMode(ConstrainMode);
+    ConstrainMode getConstrainMode() const;
+
+    // Viewport mode
+    void setViewportMode(ViewportMode);
+    ViewportMode getViewportMode() const;
+
     // Size
-    uint16_t getWidth() const;
-    uint16_t getHeight() const;
+    void setSize(Size);
+    Size getSize() const;
 
     // Projection
-    MetersBounds getWorldBoundsMeters() const;
-    LatLngBounds getWorldBoundsLatLng() const;
-
-    double getMetersPerPixelAtLatitude(double lat, double zoom) const;
-    ProjectedMeters projectedMetersForLatLng(const LatLng&) const;
-    LatLng latLngForProjectedMeters(const ProjectedMeters&) const;
-    PrecisionPoint pixelForLatLng(const LatLng&) const;
-    LatLng latLngForPixel(const PrecisionPoint&) const;
+    ScreenCoordinate pixelForLatLng(const LatLng&) const;
+    LatLng latLngForPixel(const ScreenCoordinate&) const;
 
     // Annotations
-    void addAnnotationIcon(const std::string&, std::shared_ptr<const SpriteImage>);
-    void removeAnnotationIcon(const std::string&);
-    double getTopOffsetPixelsForAnnotationIcon(const std::string&);
+    void addAnnotationImage(std::unique_ptr<style::Image>);
+    void removeAnnotationImage(const std::string&);
+    double getTopOffsetPixelsForAnnotationImage(const std::string&);
 
-    AnnotationID addPointAnnotation(const PointAnnotation&);
-    AnnotationIDs addPointAnnotations(const std::vector<PointAnnotation>&);
-
-    AnnotationID addShapeAnnotation(const ShapeAnnotation&);
-    AnnotationIDs addShapeAnnotations(const std::vector<ShapeAnnotation>&);
-
+    AnnotationID addAnnotation(const Annotation&);
+    void updateAnnotation(AnnotationID, const Annotation&);
     void removeAnnotation(AnnotationID);
-    void removeAnnotations(const AnnotationIDs&);
 
-    AnnotationIDs getPointAnnotationsInBounds(const LatLngBounds&);
-    LatLngBounds getBoundsForAnnotations(const AnnotationIDs&);
-
-    void addCustomLayer(const std::string& id,
-                        CustomLayerInitializeFunction,
-                        CustomLayerRenderFunction,
-                        CustomLayerDeinitializeFunction,
-                        void* context,
-                        const char* before = nullptr);
-    void removeCustomLayer(const std::string& id);
-
-    // Memory
-    void setSourceTileCacheSize(size_t);
-    void onLowMemory();
+    // Tile prefetching
+    //
+    // When loading a map, if `PrefetchZoomDelta` is set to any number greater than 0, the map will
+    // first request a tile for `zoom = getZoom() - delta` in a attempt to display a full map at
+    // lower resolution as quick as possible. It will get clamped at the tile source minimum zoom.
+    // The default `delta` is 4.
+    void setPrefetchZoomDelta(uint8_t delta);
+    uint8_t getPrefetchZoomDelta() const;
 
     // Debug
     void setDebug(MapDebugOptions);
@@ -188,20 +161,8 @@ public:
     void dumpDebugLogs() const;
 
 private:
-    View& view;
-    const std::unique_ptr<Transform> transform;
-    const std::unique_ptr<util::Thread<MapContext>> context;
-    MapData* data;
-
-    enum class RenderState {
-        never,
-        partial,
-        fully
-    };
-
-    RenderState renderState = RenderState::never;
+    class Impl;
+    const std::unique_ptr<Impl> impl;
 };
 
 } // namespace mbgl
-
-#endif

@@ -1,61 +1,69 @@
-#ifndef MBGL_ANNOTATION_TILE
-#define MBGL_ANNOTATION_TILE
+#pragma once
 
-#include <mbgl/map/geometry_tile.hpp>
-#include <mbgl/map/tile_id.hpp>
-
-#include <map>
-#include <unordered_map>
+#include <mbgl/annotation/annotation.hpp>
+#include <mbgl/tile/geometry_tile.hpp>
+#include <mbgl/tile/geometry_tile_data.hpp>
 
 namespace mbgl {
 
-class AnnotationTileFeature : public GeometryTileFeature {
-public:
-    AnnotationTileFeature(FeatureType, GeometryCollection,
-                          std::unordered_map<std::string, std::string> properties = {{}});
-
-    FeatureType getType() const override { return type; }
-    optional<Value> getValue(const std::string&) const override;
-    GeometryCollection getGeometries() const override { return geometries; }
-
-    const FeatureType type;
-    const std::unordered_map<std::string, std::string> properties;
-    const GeometryCollection geometries;
-};
-
-class AnnotationTileLayer : public GeometryTileLayer {
-public:
-    std::size_t featureCount() const override { return features.size(); }
-    util::ptr<const GeometryTileFeature> getFeature(std::size_t i) const override { return features[i]; }
-
-    std::vector<util::ptr<const AnnotationTileFeature>> features;
-};
+class AnnotationManager;
+class TileParameters;
 
 class AnnotationTile : public GeometryTile {
 public:
-    util::ptr<GeometryTileLayer> getLayer(const std::string&) const override;
+    AnnotationTile(const OverscaledTileID&, const TileParameters&);
+    ~AnnotationTile() override;
 
-    std::map<std::string, util::ptr<AnnotationTileLayer>> layers;
-};
-
-class MapData;
-
-class AnnotationTileMonitor : public GeometryTileMonitor {
-public:
-    // TODO: should just take AnnotationManager&, but we need to eliminate util::exclusive<AnnotationManager> from MapData first.
-    AnnotationTileMonitor(const TileID&, MapData&);
-    ~AnnotationTileMonitor();
-
-    void update(std::unique_ptr<GeometryTile>);
-    std::unique_ptr<FileRequest> monitorTile(const GeometryTileMonitor::Callback&) override;
-
-    TileID tileID;
+    void setNecessity(Necessity) final;
 
 private:
-    MapData& data;
-    GeometryTileMonitor::Callback callback;
+    AnnotationManager& annotationManager;
+};
+
+class AnnotationTileFeatureData;
+
+class AnnotationTileFeature : public GeometryTileFeature {
+public:
+    AnnotationTileFeature(std::shared_ptr<const AnnotationTileFeatureData>);
+    ~AnnotationTileFeature() override;
+
+    FeatureType getType() const override;
+    optional<Value> getValue(const std::string&) const override;
+    optional<FeatureIdentifier> getID() const override;
+    GeometryCollection getGeometries() const override;
+
+private:
+    std::shared_ptr<const AnnotationTileFeatureData> data;
+};
+
+class AnnotationTileLayerData;
+
+class AnnotationTileLayer : public GeometryTileLayer {
+public:
+    AnnotationTileLayer(std::shared_ptr<AnnotationTileLayerData>);
+
+    std::size_t featureCount() const override;
+    std::unique_ptr<GeometryTileFeature> getFeature(std::size_t i) const override;
+    std::string getName() const override;
+
+    void addFeature(const AnnotationID,
+                    FeatureType,
+                    GeometryCollection,
+                    std::unordered_map<std::string, std::string> properties = { {} });
+
+private:
+    std::shared_ptr<AnnotationTileLayerData> layer;
+};
+
+class AnnotationTileData : public GeometryTileData {
+public:
+    std::unique_ptr<GeometryTileData> clone() const override;
+    std::unique_ptr<GeometryTileLayer> getLayer(const std::string&) const override;
+
+    std::unique_ptr<AnnotationTileLayer> addLayer(const std::string&);
+
+private:
+    std::unordered_map<std::string, std::shared_ptr<AnnotationTileLayerData>> layers;
 };
 
 } // namespace mbgl
-
-#endif

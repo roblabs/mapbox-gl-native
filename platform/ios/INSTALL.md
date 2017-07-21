@@ -38,78 +38,141 @@ After opening `ios.xcodeproj`, you will see a couple of targets
   ![Open the project ios.xcodeproj](ios.xcodeproj.png)  
 
   ![Targets within ios.xcodeproj](ios.xcodeproj.targets.png)
+=======
+1. Run `make ipackage`. The packaging script will produce a `build/ios/pkg/` folder containing:
+  - a `dynamic` folder containing a dynamically-linked fat framework with debug symbols for devices and the iOS Simulator
+  - a `static` folder containing a statically-linked framework with debug symbols for devices and the iOS Simulator
+  - a `documentation` folder with HTML API documentation
+  - an example `Settings.bundle` containing an optional Mapbox Telemetry opt-out setting
 
-### Access Tokens
+See the [packaging documentation](DEVELOPING.md#packaging-builds) for other build options.
 
-_The demo applications use Mapbox vector tiles, which require a Mapbox account and API access token. Obtain an access token on the [Mapbox account page](https://www.mapbox.com/studio/account/tokens/)._
+### Installation
 
-Set up the access token by editing the scheme for the application target, then adding an environment variable with the name `MAPBOX_ACCESS_TOKEN`.
+There are several ways to install custom builds of the Mapbox iOS SDK:
 
-![edit scheme](https://cloud.githubusercontent.com/assets/98601/5460702/c4610262-8519-11e4-873a-8597821da468.png)
+#### Dynamic framework
 
-![setting access token in Xcode scheme](https://cloud.githubusercontent.com/assets/162976/5349358/0a086f00-7f8c-11e4-8433-bdbaccda2b58.png)
+This is the recommended workflow for manually integrating custom builds of the SDK into an application:
 
-### Test
+1. Build from source manually, per above.
 
-In the context of your own app, you can now either:
+1. Open the project editor, select your application target, then go to the General tab. Drag Mapbox.framework from the `build/ios/pkg/dynamic/` directory into the “Embedded Binaries” section. (Don’t drag it into the “Linked Frameworks and Libraries” section; Xcode will add it there automatically.) In the sheet that appears, make sure “Copy items if needed” is checked, then click Finish.
+>>>>>>> b83d79708185f0d8def1d3638fcc702305cd3fab
+
+1. In the Build Phases tab, click the + button at the top and select “New Run Script Phase”. Enter the following code into the script text field:
+
+```bash
+bash "${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/Mapbox.framework/strip-frameworks.sh"
+```
+
+(The last step, courtesy of [Realm](https://github.com/realm/realm-cocoa/), is required for working around an [iOS App Store bug](http://www.openradar.me/radar?id=6409498411401216) when archiving universal binaries.)
+
+##### Nightly builds
+
+A nightly build of the dynamic framework, based on the master branch, is available for download [here](https://mapbox.s3.amazonaws.com/mapbox-gl-native/ios/builds/mapbox-ios-sdk-nightly-dynamic.zip).
+
+#### Static framework
+
+You can alternatively install the SDK as a static framework:
+
+1. Build from source manually, per above.
+
+1. Drag the Mapbox.bundle and Mapbox.framework from the `build/ios/pkg/static/` directory into the Project navigator. In the sheet that appears, make sure “Copy items if needed” is checked, then click Finish. Open the project editor and select your application target to verify that the following changes occurred automatically:
+
+   - In the General tab, Mapbox.framework is listed in the “Linked Frameworks and Libraries” section.
+   - In the Build Settings tab, the “Framework Search Paths” (`FRAMEWORK_SEARCH_PATHS`) build setting includes the directory that contains Mapbox.framework. For most projects, the default value of `$(inherited) $(PROJECT_DIR)` should be sufficient.
+   - In the Build Phases tab, Mapbox.bundle is listed in the “Copy Bundle Resources” build phase.
+
+1. Back in the General tab, add the following Cocoa Touch frameworks and libraries to the “Linked Frameworks and Libraries” section:
+
+   - GLKit.framework
+   - ImageIO.framework
+   - MobileCoreServices.framework
+   - QuartzCore.framework
+   - SystemConfiguration.framework
+   - libc++.tbd
+   - libsqlite3.tbd
+   - libz.tbd
+
+1. In the Build Settings tab, find the Other Linker Flags setting and add `-ObjC`.
 
 #### CocoaPods
 
-Currently, until [#1437](https://github.com/mapbox/mapbox-gl-native/issues/1437) is completed, to install a _development version_ of Mapbox GL using CocoaPods you will need to build it from source manually per above.
+##### Testing pre-releases with CocoaPods
 
-1. Zip up the build product.
+To test pre-releases and/or betas, you can reference the pre-release like so in your Podfile:
 
-    ```
-    cd build/ios/pkg/static
-    ZIP=mapbox-ios-sdk.zip
-    rm -f ../${ZIP}
-    zip -r ../${ZIP} *
-    ```
+```rb
+pod 'Mapbox-iOS-SDK', podspec: 'https://raw.githubusercontent.com/mapbox/mapbox-gl-native/<insert branch or tag>/platform/ios/Mapbox-iOS-SDK.podspec'
+```
 
-1. Modify a custom `Mapbox-iOS-SDK.podspec` to download this zip file.
+##### Testing nightly releases with CocoaPods
 
-    ```rb
-    {...}
+To test a nightly dynamic framework build, update your app’s `Podfile` to point to:
 
-    m.source = {
-        :http => "http://{...}/mapbox-ios-sdk.zip",
-        :flatten => true
-    }
+```rb
+pod 'Mapbox-iOS-SDK-nightly-dynamic', podspec: 'https://raw.githubusercontent.com/mapbox/mapbox-gl-native/master/platform/ios/Mapbox-iOS-SDK-nightly-dynamic.podspec'
+```
 
-    {...}
-    ```
+##### Using your own build with CocoaPods
 
-1. Update your app's `Podfile` to point to the `Mapbox-iOS-SDK.podspec`.
+1. Build from source manually, per above.
+
+1. Update your app’s `Podfile` to point to `Mapbox-iOS-SDK.podspec`.
 
     ```rb
-    pod 'Mapbox-iOS-SDK', :podspec => 'http://{...}/Mapbox-iOS-SDK.podspec'
+    pod 'Mapbox-iOS-SDK', :path => '{...}/build/ios/pkg/{dynamic|static}/Mapbox-iOS-SDK.podspec'
     ```
 
 1. Run `pod update` to grab the newly-built library.
 
-#### Binary
+If using the static framework, add `$(inherited)` to your target’s Other Linker Flags in the Build Settings tab.
 
-1. Built from source manually per above.
+#### Carthage
 
-1. Copy the contents of `build/ios/pkg/static` into your project. It should happen automatically, but ensure that:
+For instructions on installing stable release versions of the Mapbox iOS SDK with Carthage, see [our website](https://www.mapbox.com/ios-sdk/). If you require a build without symbols pre-stripped, use [this feed URL](https://www.mapbox.com/ios-sdk/Mapbox-iOS-SDK-symbols.json) with Carthage.
 
-   - `Headers` is in your *Header Search Paths* (`HEADER_SEARCH_PATHS`) build setting.
-   - `Mapbox.bundle` is in your target's *Copy Bundle Resources* build phase.
-   - `libMapbox.a` is in your target's *Link Binary With Libraries* build phase.
+##### Testing pre-releases with Carthage
 
-1. Add the following Cocoa framework dependencies to your target's *Link Binary With Libraries* build phase:
+Carthage currently does not support pre-release versions of binaries.
 
-   - `GLKit.framework`
-   - `ImageIO.framework`
-   - `MobileCoreServices.framework`
-   - `QuartzCore.framework`
-   - `SystemConfiguration.framework`
-   - `libc++.dylib`
-   - `libsqlite3.dylib`
-   - `libz.dylib`
+##### Using your own build with Carthage
 
-1. Add `-ObjC` to your target's "Other Linker Flags" build setting (`OTHER_LDFLAGS`).
+This project does not support being compiled as a local repository by Carthage.
 
-## Troubleshooting
+### Configuration
 
-On OS X, you can also try clearing the Xcode cache with `make clear_xcode_cache`.
+1. Mapbox vector tiles require a Mapbox account and API access token. In the project editor, select the application target, then go to the Info tab. Under the “Custom iOS Target Properties” section, set `MGLMapboxAccessToken` to your access token. You can obtain an access token from the [Mapbox account page](https://www.mapbox.com/studio/account/tokens/).
+
+1. _(Optional)_ Mapbox Telemetry is a [powerful location analytics platform](https://www.mapbox.com/telemetry/) included in this SDK. By default, anonymized location and usage data is sent to Mapbox whenever the host application causes it to be gathered. This SDK provides users with a way to individually opt out of Mapbox Telemetry. You can also add this opt-out setting to your application’s Settings screen using a Settings bundle. An example Settings.bundle is available in the `build/ios/pkg/` directory; drag it into the Project navigator, checking “Copy items if needed” when prompted. In the project editor, verify that the following change occurred automatically:
+
+   - In the General tab, Settings.bundle is listed in the “Copy Bundle Resources” build phase.
+
+### Usage
+
+In a storyboard or XIB, add a view to your view controller. (Drag View from the Object library to the View Controller scene on the Interface Builder canvas.) In the Identity inspector, set the view’s custom class to `MGLMapView`. If you need to manipulate the map view programmatically:
+
+1. Switch to the Assistant Editor.
+1. Import the `Mapbox` module.
+1. Connect the map view to a new outlet in your view controller class. (Control-drag from the map view in Interface Builder to a valid location in your view controller implementation.) The resulting outlet declaration should look something like this:
+
+```objc
+// ViewController.m
+@import Mapbox;
+
+@interface ViewController : UIViewController
+
+@property (strong) IBOutlet MGLMapView *mapView;
+
+@end
+```
+
+```swift
+// ViewController.swift
+import Mapbox
+
+class ViewController: UIViewController {
+    @IBOutlet var mapView: MGLMapView!
+}
+```

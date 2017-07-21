@@ -6,26 +6,34 @@ set -u
 
 NAME=Mapbox
 OUTPUT=build/ios/pkg
-LIBUV_VERSION=1.7.5
-ENABLE_BITCODE=YES
+DERIVED_DATA=build/ios
+PRODUCTS=${DERIVED_DATA}
 
-if [[ ${#} -eq 0 ]]; then # e.g. "make ipackage"
-    BUILDTYPE="Release"
-    BUILD_FOR_DEVICE=true
-    GCC_GENERATE_DEBUGGING_SYMBOLS="YES"
-elif [[ ${1} == "no-bitcode" ]]; then # e.g. "make ipackage-no-bitcode"
-    BUILDTYPE="Release"
-    BUILD_FOR_DEVICE=true
-    GCC_GENERATE_DEBUGGING_SYMBOLS="YES"
-    ENABLE_BITCODE=NO
-elif [[ ${1} == "sim" ]]; then # e.g. "make ipackage-sim"
-    BUILDTYPE="Debug"
-    BUILD_FOR_DEVICE=false
-    GCC_GENERATE_DEBUGGING_SYMBOLS="YES"
-else # e.g. "make ipackage-strip"
-    BUILDTYPE="Release"
-    BUILD_FOR_DEVICE=true
-    GCC_GENERATE_DEBUGGING_SYMBOLS="NO"
+BUILDTYPE=${BUILDTYPE:-Debug}
+BUILD_FOR_DEVICE=${BUILD_DEVICE:-true}
+SYMBOLS=${SYMBOLS:-YES}
+
+BUILD_DYNAMIC=true
+BUILD_STATIC=true
+if [[ ${FORMAT} == "static" ]]; then
+    BUILD_DYNAMIC=false
+elif [[ ${FORMAT} == "dynamic" ]]; then
+    BUILD_STATIC=false
+fi
+
+SELF_CONTAINED=${SELF_CONTAINED:-}
+STATIC_BUNDLE_DIR=
+if [[ ${SELF_CONTAINED} ]]; then
+    STATIC_BUNDLE_DIR="${OUTPUT}/static/${NAME}.framework"
+else
+    STATIC_BUNDLE_DIR="${OUTPUT}/static"
+fi
+
+STATIC_SETTINGS_DIR=
+if [[ ${SELF_CONTAINED} ]]; then
+    STATIC_SETTINGS_DIR="${OUTPUT}/static/${NAME}.framework"
+else
+    STATIC_SETTINGS_DIR="${OUTPUT}"
 fi
 
 SDK=iphonesimulator
@@ -34,119 +42,232 @@ if [[ ${BUILD_FOR_DEVICE} == true ]]; then
 fi
 IOS_SDK_VERSION=`xcrun --sdk ${SDK} --show-sdk-version`
 
+echo "Configuring ${FORMAT:-dynamic and static} ${BUILDTYPE} framework for ${SDK}; symbols: ${SYMBOLS}; self-contained static framework: ${SELF_CONTAINED:-NO}"
+
 function step { >&2 echo -e "\033[1m\033[36m* $@\033[0m"; }
 function finish { >&2 echo -en "\033[0m"; }
 trap finish EXIT
 
 
 rm -rf ${OUTPUT}
-mkdir -p "${OUTPUT}"/static
+if [[ ${BUILD_STATIC} == true ]]; then
+    mkdir -p "${OUTPUT}"/static
+fi
+if [[ ${BUILD_DYNAMIC} == true ]]; then
+    mkdir -p "${OUTPUT}"/dynamic
+fi
 
-
-step "Recording library version..."
-VERSION="${OUTPUT}"/static/version.txt
+step "Recording library version…"
+VERSION="${OUTPUT}"/version.txt
 echo -n "https://github.com/mapbox/mapbox-gl-native/commit/" > ${VERSION}
 HASH=`git log | head -1 | awk '{ print $2 }' | cut -c 1-10` && true
 echo -n "mapbox-gl-native "
 echo ${HASH}
 echo ${HASH} >> ${VERSION}
 
+PROJ_VERSION=$(git rev-list --count HEAD)
+SEM_VERSION=$( git describe --tags --match=ios-v*.*.* --abbrev=0 | sed 's/^ios-v//' )
+SHORT_VERSION=${SEM_VERSION%-*}
 
-step "Creating build files..."
-export MASON_PLATFORM=ios
-export BUILDTYPE=${BUILDTYPE:-Release}
-export HOST=ios
-make Xcode/ios
+step "Building targets (build ${PROJ_VERSION}, version ${SEM_VERSION})…"
 
-if [[ "${BUILD_FOR_DEVICE}" == true ]]; then
-    step "Building iOS device targets..."
-    xcodebuild -sdk iphoneos${IOS_SDK_VERSION} \
-        ARCHS="arm64 armv7 armv7s" \
-        ONLY_ACTIVE_ARCH=NO \
-        GCC_GENERATE_DEBUGGING_SYMBOLS=${GCC_GENERATE_DEBUGGING_SYMBOLS} \
-        ENABLE_BITCODE=${ENABLE_BITCODE} \
-        DEPLOYMENT_POSTPROCESSING=YES \
-        -project ./build/ios-all/gyp/mbgl.xcodeproj \
-        -configuration ${BUILDTYPE} \
-        -target everything \
-        -jobs ${JOBS}
+SCHEME='dynamic'
+if [[ ${BUILD_DYNAMIC} == true && ${BUILD_STATIC} == true ]]; then
+    SCHEME+='+static'
+elif [[ ${BUILD_STATIC} == true ]]; then
+    SCHEME='static'
 fi
 
-step "Building iOS Simulator targets..."
-xcodebuild -sdk iphonesimulator${IOS_SDK_VERSION} \
-    ARCHS="x86_64 i386" \
+xcodebuild \
+    CURRENT_PROJECT_VERSION=${PROJ_VERSION} \
+    CURRENT_SHORT_VERSION=${SHORT_VERSION} \
+    CURRENT_SEMANTIC_VERSION=${SEM_VERSION} \
+    CURRENT_COMMIT_HASH=${HASH} \
     ONLY_ACTIVE_ARCH=NO \
-    GCC_GENERATE_DEBUGGING_SYMBOLS=${GCC_GENERATE_DEBUGGING_SYMBOLS} \
-    -project ./build/ios-all/gyp/mbgl.xcodeproj \
+    -derivedDataPath ${DERIVED_DATA} \
+    -workspace ./platform/ios/ios.xcworkspace \
+    -scheme ${SCHEME} \
     -configuration ${BUILDTYPE} \
-    -target everything \
-    -jobs ${JOBS}
+    -sdk iphonesimulator \
+    -jobs ${JOBS} | xcpretty
 
-
-step "Building static library..."
-LIBS=(core.a platform-ios.a asset-fs.a http-nsurl.a)
-if [[ "${BUILD_FOR_DEVICE}" == true ]]; then
-    libtool -static -no_warning_for_no_symbols \
-        `find mason_packages/ios-${IOS_SDK_VERSION} -type f -name libuv.a` \
-        `find mason_packages/ios-${IOS_SDK_VERSION} -type f -name libgeojsonvt.a` \
-        -o ${OUTPUT}/static/lib${NAME}.a \
-        ${LIBS[@]/#/gyp/build/${BUILDTYPE}-iphoneos/libmbgl-} \
-        ${LIBS[@]/#/gyp/build/${BUILDTYPE}-iphonesimulator/libmbgl-}
-else
-    libtool -static -no_warning_for_no_symbols \
-        `find mason_packages/ios-${IOS_SDK_VERSION} -type f -name libuv.a` \
-        `find mason_packages/ios-${IOS_SDK_VERSION} -type f -name libgeojsonvt.a` \
-        -o ${OUTPUT}/static/lib${NAME}.a \
-        ${LIBS[@]/#/gyp/build/${BUILDTYPE}-iphonesimulator/libmbgl-}
+if [[ ${BUILD_FOR_DEVICE} == true ]]; then
+    xcodebuild \
+        CURRENT_PROJECT_VERSION=${PROJ_VERSION} \
+        CURRENT_SHORT_VERSION=${SHORT_VERSION} \
+        CURRENT_SEMANTIC_VERSION=${SEM_VERSION} \
+        CURRENT_COMMIT_HASH=${HASH} \
+        ONLY_ACTIVE_ARCH=NO \
+        -derivedDataPath ${DERIVED_DATA} \
+        -workspace ./platform/ios/ios.xcworkspace \
+        -scheme ${SCHEME} \
+        -configuration ${BUILDTYPE} \
+        -sdk iphoneos \
+        -jobs ${JOBS} | xcpretty
 fi
-echo "Created ${OUTPUT}/static/lib${NAME}.a"
 
+LIBS=(Mapbox.a)
 
-step "Copying Headers..."
-mkdir -p "${OUTPUT}/static/Headers"
-for i in `ls -R include/mbgl/darwin | grep -vi private`; do
-    cp -pv include/mbgl/darwin/$i "${OUTPUT}/static/Headers"
-done
-for i in `ls -R include/mbgl/ios | grep -vi private`; do
-    cp -pv include/mbgl/ios/$i "${OUTPUT}/static/Headers"
-done
+# https://medium.com/@syshen/create-an-ios-universal-framework-148eb130a46c
+if [[ ${BUILD_FOR_DEVICE} == true ]]; then
+    if [[ ${BUILD_STATIC} == true ]]; then
+        step "Assembling static framework for iOS Simulator and devices…"
+        mkdir -p ${OUTPUT}/static/${NAME}.framework
+        libtool -static -no_warning_for_no_symbols \
+            -o ${OUTPUT}/static/${NAME}.framework/${NAME} \
+            ${LIBS[@]/#/${PRODUCTS}/${BUILDTYPE}-iphoneos/lib} \
+            ${LIBS[@]/#/${PRODUCTS}/${BUILDTYPE}-iphonesimulator/lib} \
+            `cmake -LA -N ${DERIVED_DATA} | grep MASON_PACKAGE_icu_LIBRARIES | cut -d= -f2`
 
+        cp -rv ${PRODUCTS}/${BUILDTYPE}-iphoneos/${NAME}.bundle ${STATIC_BUNDLE_DIR}
+    fi
 
-# Manually create resource bundle. We don't use a GYP target here because of
-# complications between faked GYP bundles-as-executables, device build
-# dependencies, and code signing.
-step "Copying Resources..."
-cp -pv LICENSE.md "${OUTPUT}/static"
-mkdir -p "${OUTPUT}/static/${NAME}.bundle"
-cp -pv platform/ios/resources/* "${OUTPUT}/static/${NAME}.bundle"
+    if [[ ${BUILD_DYNAMIC} == true ]]; then
+        step "Copying dynamic framework into place for iOS devices"
+        cp -r \
+            ${PRODUCTS}/${BUILDTYPE}-iphoneos/${NAME}.framework \
+            ${OUTPUT}/dynamic/
 
-step "Creating API Docs..."
-if [ -z `which jazzy` ]; then
-    step "Installing jazzy..."
-    gem install jazzy
-    if [ -z `which jazzy` ]; then
-        echo "Unable to install jazzy. See https://github.com/mapbox/mapbox-gl-native/blob/master/platform/ios/INSTALL.md"
-        exit 1
+        if [[ -e ${PRODUCTS}/${BUILDTYPE}-iphoneos/${NAME}.framework.dSYM ]]; then
+            step "Copying dSYM"
+            cp -r ${PRODUCTS}/${BUILDTYPE}-iphoneos/${NAME}.framework.dSYM \
+                  ${OUTPUT}/dynamic/
+            if [[ -e ${PRODUCTS}/${BUILDTYPE}-iphonesimulator/${NAME}.framework.dSYM ]]; then
+                step "Merging device and simulator dSYMs…"
+                lipo \
+                    ${PRODUCTS}/${BUILDTYPE}-iphoneos/${NAME}.framework.dSYM/Contents/Resources/DWARF/${NAME} \
+                    ${PRODUCTS}/${BUILDTYPE}-iphonesimulator/${NAME}.framework.dSYM/Contents/Resources/DWARF/${NAME} \
+                    -create -output ${OUTPUT}/dynamic/${NAME}.framework.dSYM/Contents/Resources/DWARF/${NAME}
+                lipo -info ${OUTPUT}/dynamic/${NAME}.framework.dSYM/Contents/Resources/DWARF/${NAME}
+            fi
+        fi
+
+        step "Merging simulator dynamic library into device dynamic library…"
+        lipo \
+            ${PRODUCTS}/${BUILDTYPE}-iphoneos/${NAME}.framework/${NAME} \
+            ${PRODUCTS}/${BUILDTYPE}-iphonesimulator/${NAME}.framework/${NAME} \
+            -create -output ${OUTPUT}/dynamic/${NAME}.framework/${NAME} | echo
+    fi
+
+    cp -rv ${PRODUCTS}/${BUILDTYPE}-iphoneos/Settings.bundle ${STATIC_SETTINGS_DIR}
+else
+    if [[ ${BUILD_STATIC} == true ]]; then
+        step "Assembling static library for iOS Simulator…"
+        mkdir -p ${OUTPUT}/static/${NAME}.framework
+        libtool -static -no_warning_for_no_symbols \
+            -o ${OUTPUT}/static/${NAME}.framework/${NAME} \
+            ${LIBS[@]/#/${PRODUCTS}/${BUILDTYPE}-iphonesimulator/lib} \
+            `cmake -LA -N ${DERIVED_DATA} | grep MASON_PACKAGE_icu_LIBRARIES | cut -d= -f2`
+
+        cp -rv ${PRODUCTS}/${BUILDTYPE}-iphonesimulator/${NAME}.bundle ${STATIC_BUNDLE_DIR}
+    fi
+
+    if [[ ${BUILD_DYNAMIC} == true ]]; then
+        step "Copying dynamic framework into place for iOS Simulator…"
+        cp -r \
+            ${PRODUCTS}/${BUILDTYPE}-iphonesimulator/${NAME}.framework \
+            ${OUTPUT}/dynamic/${NAME}.framework
+        if [[ -e ${PRODUCTS}/${BUILDTYPE}-iphonesimulator/${NAME}.framework.dSYM ]]; then
+            step "Copying dSYM"
+            cp -r ${PRODUCTS}/${BUILDTYPE}-iphonesimulator/${NAME}.framework.dSYM \
+                ${OUTPUT}/dynamic/
+        fi
+    fi
+
+    cp -rv ${PRODUCTS}/${BUILDTYPE}-iphonesimulator/Settings.bundle ${STATIC_SETTINGS_DIR}
+fi
+
+if [[ ${SYMBOLS} = NO ]]; then
+    step "Stripping symbols from binaries"
+    if [[ ${BUILD_STATIC} == true ]]; then
+        strip -Sx "${OUTPUT}/static/${NAME}.framework/${NAME}"
+    fi
+    if [[ ${BUILD_DYNAMIC} == true ]]; then
+        strip -Sx "${OUTPUT}/dynamic/${NAME}.framework/${NAME}"
     fi
 fi
-DOCS_OUTPUT="${OUTPUT}/static/Docs"
-DOCS_VERSION=$( git tag | grep ^ios | sed 's/^ios-//' | sort -r | grep -v '\-rc.' | grep -v '\-pre.' | sed -n '1p' | sed 's/^v//' )
+
+function get_comparable_uuid {
+    echo $(dwarfdump --uuid ${1} | sed -n 's/.*UUID:\([^\"]*\) .*/\1/p' | sort)
+}
+
+function validate_dsym {
+    step "Validating dSYM and framework UUIDs…"
+    DSYM_UUID=$(get_comparable_uuid "${1}")
+    FRAMEWORK_UUID=$(get_comparable_uuid "${2}")
+    echo -e "${1}\n  ${DSYM_UUID}\n${2}\n  ${FRAMEWORK_UUID}"
+    if [[ ${DSYM_UUID} != ${FRAMEWORK_UUID} ]]; then
+        echo "Error: dSYM and framework UUIDs do not match."
+        exit 1
+    fi
+}
+
+if [[ ${BUILD_DYNAMIC} == true && ${BUILDTYPE} == Release ]]; then
+    validate_dsym \
+        "${OUTPUT}/dynamic/${NAME}.framework.dSYM/Contents/Resources/DWARF/${NAME}" \
+        "${OUTPUT}/dynamic/${NAME}.framework/${NAME}"
+fi
+
+function create_podspec {
+    step "Creating local podspec (${1})"
+    [[ $SYMBOLS = YES ]] && POD_SUFFIX="-symbols" || POD_SUFFIX=""
+    POD_SOURCE_PATH='    :path => ".",'
+    POD_FRAMEWORKS="  m.vendored_frameworks = '"${NAME}".framework'"
+    INPUT_PODSPEC=platform/ios/${NAME}-iOS-SDK${POD_SUFFIX}.podspec
+    OUTPUT_PODSPEC=${OUTPUT}/${1}/${NAME}-iOS-SDK${POD_SUFFIX}.podspec
+    if [[ ${1} == "dynamic" ]]; then
+        sed "s/.*:http.*/${POD_SOURCE_PATH}/" ${INPUT_PODSPEC} > ${OUTPUT_PODSPEC}
+        sed -i '' "s/.*vendored_frameworks.*/${POD_FRAMEWORKS}/" ${OUTPUT_PODSPEC}
+    fi
+    if [[ ${1} == "static" ]]; then
+        awk '/Pod::Spec.new/,/m.platform/' ${INPUT_PODSPEC} > ${OUTPUT_PODSPEC}
+        cat platform/ios/${NAME}-iOS-SDK-static-part.podspec >> ${OUTPUT_PODSPEC}
+        sed -i '' "s/.*:http.*/${POD_SOURCE_PATH}/" ${OUTPUT_PODSPEC}
+    fi
+    cp -pv LICENSE.md ${OUTPUT}/${1}/
+}
+
+if [[ ${BUILD_STATIC} == true ]]; then
+    stat "${OUTPUT}/static/${NAME}.framework"
+    create_podspec "static"
+fi
+if [[ ${BUILD_DYNAMIC} == true ]]; then
+    stat "${OUTPUT}/dynamic/${NAME}.framework"
+    create_podspec "dynamic"
+fi
+
+if [[ ${BUILD_STATIC} == true ]]; then
+    step "Copying static library headers…"
+    cp -rv "${PRODUCTS}/${BUILDTYPE}-iphoneos/Headers" "${OUTPUT}/static/${NAME}.framework/Headers"
+    cat platform/ios/framework/Mapbox-static.h > "${OUTPUT}/static/${NAME}.framework/Headers/Mapbox.h"
+    cat "${PRODUCTS}/${BUILDTYPE}-iphoneos/Headers/Mapbox.h" >> "${OUTPUT}/static/${NAME}.framework/Headers/Mapbox.h"
+fi
+
+step "Copying library resources…"
+cp -pv LICENSE.md ${STATIC_SETTINGS_DIR}
+if [[ ${BUILD_STATIC} == true ]]; then
+    cp -pv "${STATIC_BUNDLE_DIR}/${NAME}.bundle/Info.plist" "${OUTPUT}/static/${NAME}.framework/Info.plist"
+    plutil -replace CFBundlePackageType -string FMWK "${OUTPUT}/static/${NAME}.framework/Info.plist"
+    mkdir "${OUTPUT}/static/${NAME}.framework/Modules"
+    cp -pv platform/ios/framework/modulemap "${OUTPUT}/static/${NAME}.framework/Modules/module.modulemap"
+fi
+sed -n -e '/^## /,$p' platform/ios/CHANGELOG.md > "${OUTPUT}/CHANGELOG.md"
+
 rm -rf /tmp/mbgl
 mkdir -p /tmp/mbgl/
 README=/tmp/mbgl/README.md
-cat ios/docs/pod-README.md > ${README}
-echo >> ${README}
-echo -n "#" >> ${README}
-cat CHANGELOG.md | sed -n "/^## iOS ${DOCS_VERSION}/,/^##/p" | sed '$d' >> ${README}
+cp platform/ios/docs/pod-README.md "${README}"
+if [[ ${BUILD_DYNAMIC} == false ]]; then
+    sed -i '' -e '/{{DYNAMIC}}/,/{{\/DYNAMIC}}/d' "${README}"
+fi
+if [[ ${BUILD_STATIC} == false ]]; then
+    sed -i '' -e '/{{STATIC}}/,/{{\/STATIC}}/d' "${README}"
+fi
+sed -i '' \
+    -e '/{{DYNAMIC}}/d' -e '/{{\/DYNAMIC}}/d' \
+    -e '/{{STATIC}}/d' -e '/{{\/STATIC}}/d' \
+    "${README}"
 cp ${README} "${OUTPUT}"
 
-jazzy \
-    --sdk iphonesimulator \
-    --github-file-prefix https://github.com/mapbox/mapbox-gl-native/tree/${HASH} \
-    --module-version ${DOCS_VERSION} \
-    --readme ${README} \
-    --root-url https://www.mapbox.com/ios-sdk/api/${DOCS_VERSION}/ \
-    --output ${DOCS_OUTPUT}
-# https://github.com/realm/jazzy/issues/411
-find ${DOCS_OUTPUT} -name *.html -exec \
-    perl -pi -e 's/Mapbox\s+(Docs|Reference)/Mapbox iOS SDK $1/' {} \;
+step "Generating API documentation…"
+make idocument OUTPUT="${OUTPUT}/documentation"

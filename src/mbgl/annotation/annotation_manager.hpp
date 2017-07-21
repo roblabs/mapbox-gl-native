@@ -1,65 +1,89 @@
-#ifndef MBGL_ANNOTATION_MANAGER
-#define MBGL_ANNOTATION_MANAGER
+#pragma once
 
 #include <mbgl/annotation/annotation.hpp>
-#include <mbgl/annotation/point_annotation_impl.hpp>
-#include <mbgl/annotation/shape_annotation_impl.hpp>
-#include <mbgl/sprite/sprite_store.hpp>
-#include <mbgl/sprite/sprite_atlas.hpp>
-#include <mbgl/util/geo.hpp>
+#include <mbgl/annotation/symbol_annotation_impl.hpp>
+#include <mbgl/style/image.hpp>
+#include <mbgl/map/update.hpp>
 #include <mbgl/util/noncopyable.hpp>
 
+#include <mutex>
 #include <string>
 #include <vector>
-#include <set>
+#include <unordered_set>
+#include <unordered_map>
 
 namespace mbgl {
 
-class PointAnnotation;
-class ShapeAnnotation;
+class LatLngBounds;
 class AnnotationTile;
-class AnnotationTileMonitor;
+class AnnotationTileData;
+class SymbolAnnotationImpl;
+class ShapeAnnotationImpl;
+
+namespace style {
 class Style;
+} // namespace style
 
 class AnnotationManager : private util::noncopyable {
 public:
-    AnnotationManager(float pixelRatio);
+    AnnotationManager(style::Style&);
     ~AnnotationManager();
 
-    AnnotationIDs addPointAnnotations(const std::vector<PointAnnotation>&, const uint8_t maxZoom);
-    AnnotationIDs addShapeAnnotations(const std::vector<ShapeAnnotation>&, const uint8_t maxZoom);
-    void removeAnnotations(const AnnotationIDs&);
+    AnnotationID addAnnotation(const Annotation&, const uint8_t maxZoom);
+    Update updateAnnotation(const AnnotationID&, const Annotation&, const uint8_t maxZoom);
+    void removeAnnotation(const AnnotationID&);
 
-    AnnotationIDs getPointAnnotationsInBounds(const LatLngBounds&) const;
-    LatLngBounds getBoundsForAnnotations(const AnnotationIDs&) const;
+    void addImage(std::unique_ptr<style::Image>);
+    void removeImage(const std::string&);
+    double getTopOffsetPixelsForImage(const std::string&);
 
-    void addIcon(const std::string& name, std::shared_ptr<const SpriteImage>);
-    void removeIcon(const std::string& name);
-    double getTopOffsetPixelsForIcon(const std::string& name);
-    SpriteAtlas& getSpriteAtlas() { return spriteAtlas; }
+    void setStyle(style::Style&);
+    void onStyleLoaded();
 
-    void updateStyle(Style&);
+    void updateData();
 
-    void addTileMonitor(AnnotationTileMonitor&);
-    void removeTileMonitor(AnnotationTileMonitor&);
+    void addTile(AnnotationTile&);
+    void removeTile(AnnotationTile&);
 
     static const std::string SourceID;
     static const std::string PointLayerID;
 
 private:
-    std::unique_ptr<AnnotationTile> getTile(const TileID&);
+    void add(const AnnotationID&, const SymbolAnnotation&, const uint8_t);
+    void add(const AnnotationID&, const LineAnnotation&, const uint8_t);
+    void add(const AnnotationID&, const FillAnnotation&, const uint8_t);
+
+    Update update(const AnnotationID&, const SymbolAnnotation&, const uint8_t);
+    Update update(const AnnotationID&, const LineAnnotation&, const uint8_t);
+    Update update(const AnnotationID&, const FillAnnotation&, const uint8_t);
+
+    void remove(const AnnotationID&);
+
+    void updateStyle();
+
+    std::unique_ptr<AnnotationTileData> getTileData(const CanonicalTileID&);
+
+    std::reference_wrapper<style::Style> style;
+
+    std::mutex mutex;
 
     AnnotationID nextID = 0;
-    PointAnnotationImpl::Tree pointTree;
-    PointAnnotationImpl::Map pointAnnotations;
-    ShapeAnnotationImpl::Map shapeAnnotations;
-    std::vector<std::string> obsoleteShapeAnnotationLayers;
-    std::set<AnnotationTileMonitor*> monitors;
 
-    SpriteStore spriteStore;
-    SpriteAtlas spriteAtlas;
+    using SymbolAnnotationTree = boost::geometry::index::rtree<std::shared_ptr<const SymbolAnnotationImpl>, boost::geometry::index::rstar<16, 4>>;
+    // Unlike std::unordered_map, std::map is guaranteed to sort by AnnotationID, ensuring that older annotations are below newer annotations.
+    // <https://github.com/mapbox/mapbox-gl-native/issues/5691>
+    using SymbolAnnotationMap = std::map<AnnotationID, std::shared_ptr<SymbolAnnotationImpl>>;
+    using ShapeAnnotationMap = std::map<AnnotationID, std::unique_ptr<ShapeAnnotationImpl>>;
+    using ImageMap = std::unordered_map<std::string, style::Image>;
+
+    SymbolAnnotationTree symbolTree;
+    SymbolAnnotationMap symbolAnnotations;
+    ShapeAnnotationMap shapeAnnotations;
+    ImageMap images;
+
+    std::unordered_set<AnnotationTile*> tiles;
+
+    friend class AnnotationTile;
 };
 
 } // namespace mbgl
-
-#endif

@@ -1,38 +1,34 @@
-#ifndef MBGL_LAYOUT_PROPERTY
-#define MBGL_LAYOUT_PROPERTY
+#pragma once
 
-#include <mbgl/style/property_parsing.hpp>
-#include <mbgl/style/function.hpp>
-#include <mbgl/util/rapidjson.hpp>
-
-#include <utility>
+#include <mbgl/style/property_value.hpp>
+#include <mbgl/style/data_driven_property_value.hpp>
+#include <mbgl/renderer/property_evaluator.hpp>
+#include <mbgl/renderer/data_driven_property_evaluator.hpp>
 
 namespace mbgl {
+namespace style {
 
-template <typename T>
+template <class T>
 class LayoutProperty {
 public:
-    explicit LayoutProperty(T v) : value(std::move(v)) {}
-
-    void parse(const char * name, const JSValue& layout) {
-        if (layout.HasMember(name)) {
-            parsedValue = parseProperty<Function<T>>(name, layout[name]);
-        }
-    }
-
-    void calculate(const StyleCalculationParameters& parameters) {
-        if (parsedValue) {
-            value = (*parsedValue).evaluate(parameters);
-        }
-    }
-
-    void operator=(const T& v) { value = v; }
-    operator T() const { return value; }
-
-    optional<Function<T>> parsedValue;
-    T value;
+    using TransitionableType = std::nullptr_t;
+    using UnevaluatedType = PropertyValue<T>;
+    using EvaluatorType = PropertyEvaluator<T>;
+    using PossiblyEvaluatedType = T;
+    using Type = T;
+    static constexpr bool IsDataDriven = false;
 };
 
-} // namespace mbgl
+template <class T>
+class DataDrivenLayoutProperty {
+public:
+    using TransitionableType = std::nullptr_t;
+    using UnevaluatedType = DataDrivenPropertyValue<T>;
+    using EvaluatorType = DataDrivenPropertyEvaluator<T>;
+    using PossiblyEvaluatedType = PossiblyEvaluatedPropertyValue<T>;
+    using Type = T;
+    static constexpr bool IsDataDriven = true;
+};
 
-#endif
+} // namespace style
+} // namespace mbgl
