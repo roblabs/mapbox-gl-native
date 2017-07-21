@@ -458,6 +458,7 @@
 		FA68F14D1E9D656600F9F6C2 /* MGLFillExtrusionStyleLayer.mm in Sources */ = {isa = PBXBuildFile; fileRef = FA68F1491E9D656600F9F6C2 /* MGLFillExtrusionStyleLayer.mm */; };
 		FA68F14E1E9D656600F9F6C2 /* MGLFillExtrusionStyleLayer.mm in Sources */ = {isa = PBXBuildFile; fileRef = FA68F1491E9D656600F9F6C2 /* MGLFillExtrusionStyleLayer.mm */; };
 		FAE1CDCB1E9D79CB00C40B5B /* MGLFillExtrusionStyleLayerTests.mm in Sources */ = {isa = PBXBuildFile; fileRef = FAE1CDC81E9D79C600C40B5B /* MGLFillExtrusionStyleLayerTests.mm */; };
+		FDF6A4A51F227DC900FD71B5 /* WebP.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FD0A95591F225E5000871A66 /* WebP.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -930,6 +931,7 @@
 		FA68F1481E9D656600F9F6C2 /* MGLFillExtrusionStyleLayer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MGLFillExtrusionStyleLayer.h; sourceTree = "<group>"; };
 		FA68F1491E9D656600F9F6C2 /* MGLFillExtrusionStyleLayer.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = MGLFillExtrusionStyleLayer.mm; sourceTree = "<group>"; };
 		FAE1CDC81E9D79C600C40B5B /* MGLFillExtrusionStyleLayerTests.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; name = MGLFillExtrusionStyleLayerTests.mm; path = ../../darwin/test/MGLFillExtrusionStyleLayerTests.mm; sourceTree = "<group>"; };
+		FD0A95591F225E5000871A66 /* WebP.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; path = WebP.framework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -955,6 +957,7 @@
 			files = (
 				DAABF73D1CBC59BB005B1825 /* libmbgl-core.a in Frameworks */,
 				DA27C24E1CBB3811000B0ECD /* GLKit.framework in Frameworks */,
+				FDF6A4A51F227DC900FD71B5 /* WebP.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1229,6 +1232,7 @@
 				DAA4E4041CBB5C9E00178DFB /* ImageIO.framework */,
 				DAA4E4061CBB5CBF00178DFB /* MobileCoreServices.framework */,
 				DA4A26961CB6E795000B7809 /* Mapbox.framework */,
+				FD0A95591F225E5000871A66 /* WebP.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -2734,6 +2738,10 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				HEADER_SEARCH_PATHS = (
 					"$(mbgl_core_INCLUDE_DIRECTORIES)",
 					"$(polylabel_INCLUDE_DIRECTORIES)",
@@ -2771,6 +2779,10 @@
 				DYLIB_COMPATIBILITY_VERSION = 1;
 				DYLIB_CURRENT_VERSION = 1;
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)",
+				);
 				HEADER_SEARCH_PATHS = (
 					"$(mbgl_core_INCLUDE_DIRECTORIES)",
 					"$(polylabel_INCLUDE_DIRECTORIES)",
