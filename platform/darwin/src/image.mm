@@ -1,6 +1,7 @@
 #include <mbgl/util/image+MGLAdditions.hpp>
 
 #import <ImageIO/ImageIO.h>
+#import <webp/decode.h>
 
 namespace {
 
@@ -82,8 +83,83 @@ mbgl::PremultipliedImage MGLPremultipliedImageFromCGImage(CGImageRef src) {
 }
 
 namespace mbgl {
+    
+    
+    PremultipliedImage decodeWebP(const uint8_t*, size_t);
+    
+    PremultipliedImage decodeImage(const std::string &source_data) {
+        // CoreFoundation does not decode WebP natively.
+        size_t size = source_data.size();
+        if (size >= 12) {
+            const uint8_t* data = reinterpret_cast<const uint8_t*>(source_data.data());
+            uint32_t riff_magic = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+            uint32_t webp_magic = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
+            if (riff_magic == 0x52494646 && webp_magic == 0x57454250) {
+                return decodeWebP(data, size);
+            }
+        }
+        
+        CFDataRef data = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault, reinterpret_cast<const unsigned char *>(source_data.data()), size, kCFAllocatorNull);
+        if (!data) {
+            throw std::runtime_error("CFDataCreateWithBytesNoCopy failed");
+        }
+        
+        CGImageSourceRef image_source = CGImageSourceCreateWithData(data, NULL);
+        if (!image_source) {
+            CFRelease(data);
+            throw std::runtime_error("CGImageSourceCreateWithData failed");
+        }
+        
+        CGImageRef image = CGImageSourceCreateImageAtIndex(image_source, 0, NULL);
+        if (!image) {
+            CFRelease(image_source);
+            CFRelease(data);
+            throw std::runtime_error("CGImageSourceCreateImageAtIndex failed");
+        }
+        
+        CGColorSpaceRef color_space = CGColorSpaceCreateDeviceRGB();
+        if (!color_space) {
+            CGImageRelease(image);
+            CFRelease(image_source);
+            CFRelease(data);
+            throw std::runtime_error("CGColorSpaceCreateDeviceRGB failed");
+        }
+        
 
-PremultipliedImage decodeImage(const std::string& source) {
+        Size imageSize = *new Size((uint32_t)CGImageGetWidth(image), (uint32_t)CGImageGetHeight(image));
+        PremultipliedImage result { imageSize };
+        
+        CGContextRef context = CGBitmapContextCreate(result.data.get(),
+                                                     result.size.width,
+                                                     result.size.height,
+                                                     8,
+                                                     result.stride(),
+                                                     color_space,
+                                                     kCGImageAlphaPremultipliedLast);
+        
+        if (!context) {
+            CGColorSpaceRelease(color_space);
+            CGImageRelease(image);
+            CFRelease(image_source);
+            CFRelease(data);
+            throw std::runtime_error("CGBitmapContextCreate failed");
+        }
+        
+        CGContextSetBlendMode(context, kCGBlendModeCopy);
+        
+        CGRect rect = {{ 0, 0 }, { static_cast<CGFloat>(result.size.width), static_cast<CGFloat>(result.size.height) }};
+        CGContextDrawImage(context, rect, image);
+        
+        CGContextRelease(context);
+        CGColorSpaceRelease(color_space);
+        CGImageRelease(image);
+        CFRelease(image_source);
+        CFRelease(data);
+        
+        return result;
+    }
+
+PremultipliedImage decodeImageOld(const std::string& source) {
     CFDataHandle data(CFDataCreateWithBytesNoCopy(
         kCFAllocatorDefault, reinterpret_cast<const unsigned char*>(source.data()), source.size(),
         kCFAllocatorNull));
