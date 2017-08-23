@@ -17,7 +17,7 @@ This demo is based on the `mapbox-gl-native` tag  [ios-v3.6.0](https://github.co
 
 Ideally, WebP should be compiled using the [`mapbox/mason`](https://github.com/mapbox/mason) architecture.  *cf.* [#450](https://github.com/mapbox/mason/issues/450)
 
-*  [platform/ios/config.cmake](platform/ios/config.cmake#L4) has comments on how to pull in WebP using Mason
+*  [platform/ios/config.cmake](platform/ios/config.cmake#L4) has comments on how integrate WebP using Mason
 
 ### iOS Demo
 
@@ -25,9 +25,11 @@ Ideally, WebP should be compiled using the [`mapbox/mason`](https://github.com/m
 
 ![webp-demo-mapbox-3.6.0.png](http://www.roblabs.com/assets/img/1970-01-01-webp-webp-demo-mapbox-3.6.0.png)
 
-### WebP as a framework
+### WebP as a `framework`
 
-For this Mapbox GL + WebP in iOS demonstration, we will be using the precompiled WebP framework downloaded from the [WebP source](https://developers.google.com/speed/webp/download).
+Please use the Mason framework to pull in WebP.  These notes are here to describe how WebP was originally brought into `mapbox-gl-native`
+
+You can also use the precompiled WebP framework downloaded from the [WebP source](https://developers.google.com/speed/webp/download).
 
 1. Add WebP support based on discussion of [`mapbox/mapbox-gl-native` #3572](https://github.com/mapbox/mapbox-gl-native/issues/3572) and the branch [`webp-darwin`](https://github.com/mapbox/mapbox-gl-native/tree/webp-darwin)
   1. ✅ - See   [`image.mm`](platform/darwin/src/image.mm)
