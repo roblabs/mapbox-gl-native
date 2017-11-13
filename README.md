@@ -25,11 +25,13 @@ Ideally, WebP should be compiled using the [`mapbox/mason`](https://github.com/m
 
 ![webp-demo-mapbox-3.6.0.png](http://www.roblabs.com/assets/img/1970-01-01-webp-webp-demo-mapbox-3.6.0.png)
 
-### WebP as a `framework`
+### WebP as a `framework` via Mason
 
-Please use the Mason framework to pull in WebP.  These notes are here to describe how WebP was originally brought into `mapbox-gl-native`
+We use the Mason framework to pull in WebP.  
 
-You can also use the precompiled WebP framework downloaded from the [WebP source](https://developers.google.com/speed/webp/download).
+~~These notes are here to describe how WebP was originally brought into `mapbox-gl-native`~~
+
+~~You can also use the precompiled WebP framework downloaded from the [WebP source](https://developers.google.com/speed/webp/download).~~
 
 1. Add WebP support based on discussion of [`mapbox/mapbox-gl-native` #3572](https://github.com/mapbox/mapbox-gl-native/issues/3572) and the branch [`webp-darwin`](https://github.com/mapbox/mapbox-gl-native/tree/webp-darwin)
   1. ✅ - See   [`image.mm`](platform/darwin/src/image.mm)
@@ -37,12 +39,12 @@ You can also use the precompiled WebP framework downloaded from the [WebP source
 1. ✅ - Add `WebP.framework` to `platform/ios`
 1. `make clean`
 1. `make iproj`
-1. ✅ - Update the Headers Search path.  See the file  [`config.cmake`](platform/ios/config.cmake#L87)
-1. ⚠️ - Manually add WebP to `build/ios/mbgl.xcodeproj`- * **TODO: - ** would be nice if this could be part of the Make*
-  1. Open the `mbgl-core` target in Xcode
-  1. Build Phases > `+` > New Link Binary with Libraries Phase
-  1. `+` > Add others... > Navigate to WebP.framework
-1. `make ipackage`
+1. ✅ - Update the Headers Search path.  See the file  [`config.cmake`](platform/ios/config.cmake)
+1. ~~⚠️ - Manually add WebP to `build/ios/mbgl.xcodeproj`- *~~
+  1. ~~Open the `mbgl-core` target in Xcode~~
+  1. ~~Build Phases > `+` > New Link Binary with Libraries Phase~~
+  1. ~~`+` > Add others... > Navigate to WebP.framework~~
+1. ~~`make ipackage`~~
 
 ###### Emoji Interpreter
 
