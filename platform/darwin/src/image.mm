@@ -1,7 +1,7 @@
 #include <mbgl/util/image+MGLAdditions.hpp>
 
 #import <ImageIO/ImageIO.h>
-
+#import <decode.h> // WebP
 #import "CFHandle.hpp"
 
 using CGImageHandle = CFHandle<CGImageRef, CGImageRef, CGImageRelease>;
@@ -70,8 +70,22 @@ mbgl::PremultipliedImage MGLPremultipliedImageFromCGImage(CGImageRef src) {
 }
 
 namespace mbgl {
+    
+PremultipliedImage decodeWebP(const uint8_t*, size_t);
 
 PremultipliedImage decodeImage(const std::string& source) {
+    
+    // CoreFoundation does not decode WebP natively.
+    size_t size = source.size();
+    if (size >= 12) {
+        const uint8_t* data = reinterpret_cast<const uint8_t*>(source.data());
+        uint32_t riff_magic = (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+        uint32_t webp_magic = (data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11];
+        if (riff_magic == 0x52494646 && webp_magic == 0x57454250) {
+            return decodeWebP(data, size);
+        }
+    }
+    
     CFDataHandle data(CFDataCreateWithBytesNoCopy(
         kCFAllocatorDefault, reinterpret_cast<const unsigned char*>(source.data()), source.size(),
         kCFAllocatorNull));

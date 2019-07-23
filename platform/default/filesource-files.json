@@ -9,7 +9,8 @@
         "platform/default/src/mbgl/storage/offline.cpp",
         "platform/default/src/mbgl/storage/offline_database.cpp",
         "platform/default/src/mbgl/storage/offline_download.cpp",
-        "platform/default/src/mbgl/storage/online_file_source.cpp"
+        "platform/default/src/mbgl/storage/online_file_source.cpp",
+        "platform/default/src/mbgl/util/webp_reader.cpp"
     ],
     "public_headers": {
         "mbgl/storage/default_file_source.hpp": "include/mbgl/storage/default_file_source.hpp",
