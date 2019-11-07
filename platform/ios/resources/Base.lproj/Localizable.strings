@@ -71,7 +71,7 @@
 "ROAD_REF_A11Y_FMT" = "Route %@";
 
 /* Action sheet title */
-"SDK_NAME" = "Mapbox Maps SDK for iOS";
+"SDK_NAME" = "Mapbox Maps SDK for iOS v5.1.1-webp";
 
 /* Developer-only SDK update notification; {latest version, in format x.x.x} */
 "SDK_UPDATE_AVAILABLE" = "Mapbox Maps SDK for iOS version %@ is now available:";
