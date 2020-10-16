@@ -1,15 +1,29 @@
-#ifndef MBGL_TEXT_GETANCHORS
-#define MBGL_TEXT_GETANCHORS
+#pragma once
 
 #include <mbgl/geometry/anchor.hpp>
+#include <mbgl/tile/geometry_tile_data.hpp>
 #include <mbgl/util/math.hpp>
 
 namespace mbgl {
 
-Anchors getAnchors(const std::vector<Coordinate> &line, float spacing,
-        const float maxAngle, const float textLeft, const float textRight,
-        const float iconLeft, const float iconRight,
-        const float glyphSize, const float boxScale, const float overscaling);
-} // namespace mbgl
+Anchors getAnchors(const GeometryCoordinates& line,
+                   float spacing,
+                   float maxAngle,
+                   float textLeft,
+                   float textRight,
+                   float iconLeft,
+                   float iconRight,
+                   float glyphSize,
+                   float boxScale,
+                   float overscaling);
 
-#endif
+optional<Anchor> getCenterAnchor(const GeometryCoordinates& line,
+                                 float maxAngle,
+                                 float textLeft,
+                                 float textRight,
+                                 float iconLeft,
+                                 float iconRight,
+                                 float glyphSize,
+                                 float boxScale);
+
+} // namespace mbgl

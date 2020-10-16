@@ -1,4 +1,4 @@
-# Contributing to the Mapbox iOS SDK
+# Contributing to the Mapbox Maps SDK for iOS
 
 This document explains how to build the Mapbox iOS SDK and the osxapp demo application for the purpose of developing the SDK itself.
 

@@ -20,14 +20,43 @@
 //
 // 3. This notice may not be removed or altered from any source distribution.
 
-#ifndef MBGL_UTIL_MAT3
-#define MBGL_UTIL_MAT3
+#pragma once
 
 #include <array>
+#include <cmath>
+#include <mbgl/util/vectors.hpp>
 
 namespace mbgl {
 
-typedef std::array<double, 9> mat3;
+using mat3 = std::array<double, 9>;
+
+inline vec3 vec3Cross(const vec3& a, const vec3& b) {
+    return vec3{{a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]}};
+}
+
+inline double vec3Dot(const vec3& a, const vec3& b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+inline double vec3LengthSq(const vec3& a) {
+    return vec3Dot(a, a);
+}
+
+inline double vec3Length(const vec3& a) {
+    return std::sqrt(vec3LengthSq(a));
+}
+
+inline vec3 vec3Scale(const vec3& a, double s) {
+    return vec3{{a[0] * s, a[1] * s, a[2] * s}};
+}
+
+inline vec3 vec3Normalize(const vec3& a) {
+    return vec3Scale(a, 1.0 / vec3Length(a));
+}
+
+inline vec3 vec3Sub(const vec3& a, const vec3& b) {
+    return vec3{{a[0] - b[0], a[1] - b[1], a[2] - b[2]}};
+}
 
 namespace matrix {
 
@@ -36,7 +65,7 @@ void translate(mat3& out, const mat3& a, double x, double y);
 void rotate(mat3& out, const mat3& a, double rad);
 void scale(mat3& out, const mat3& a, double x, double y);
 
+void transformMat3f(vec3f& out, const vec3f& a, const mat3& m);
+
 } // namespace matrix
 } // namespace mbgl
-
-#endif

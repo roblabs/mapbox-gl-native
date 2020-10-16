@@ -1,59 +1,42 @@
-#ifndef MBGL_UTIL_THREAD_LOCAL
-#define MBGL_UTIL_THREAD_LOCAL
+#pragma once
 
-#include <mbgl/util/noncopyable.hpp>
-
-#include <stdexcept>
-
-#include <pthread.h>
+#include <type_traits>
 
 namespace mbgl {
 namespace util {
+namespace impl {
+
+class ThreadLocalBase {
+protected:
+    ThreadLocalBase();
+    ~ThreadLocalBase();
+
+    void* get();
+    void set(void*);
+
+private:
+    std::aligned_storage_t<sizeof(void*), alignof(void*)> storage;
+};
+
+} // namespace impl
 
 template <class T>
-class ThreadLocal : public noncopyable {
+class ThreadLocal : public impl::ThreadLocalBase {
 public:
-    inline ThreadLocal(T* val) {
-        ThreadLocal();
+    ThreadLocal() = default;
+
+    ThreadLocal(T* val) {
         set(val);
     }
 
-    inline ThreadLocal() {
-        int ret = pthread_key_create(&key, [](void *ptr) {
-            delete reinterpret_cast<T *>(ptr);
-        });
-
-        if (ret) {
-            throw std::runtime_error("Failed to init local storage key.");
-        }
+    T* get() {
+        return reinterpret_cast<T*>(impl::ThreadLocalBase::get());
     }
 
-    inline ~ThreadLocal() {
-        if (pthread_key_delete(key)) {
-            throw std::runtime_error("Failed to delete local storage key.");
-        }
+    void set(T* ptr) {
+        impl::ThreadLocalBase::set(ptr);
     }
-
-    inline T* get() {
-        T* ret = reinterpret_cast<T*>(pthread_getspecific(key));
-        if (!ret) {
-            return nullptr;
-        }
-
-        return ret;
-    }
-
-    inline void set(T* ptr) {
-        if (pthread_setspecific(key, ptr)) {
-            throw std::runtime_error("Failed to set local storage.");
-        }
-    }
-
-private:
-    pthread_key_t key;
 };
 
 } // namespace util
 } // namespace mbgl
-
-#endif

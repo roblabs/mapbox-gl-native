@@ -1,4 +1,4 @@
-# Integrating the Mapbox iOS SDK into your application
+# Integrating custom builds of the Mapbox Maps SDK for iOS into your application
 
 This document explains how to build a development version of Mapbox iOS SDK for the purpose of incorporating it into your own Cocoa Touch application.
 

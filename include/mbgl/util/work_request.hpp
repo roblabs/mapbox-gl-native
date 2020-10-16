@@ -1,7 +1,6 @@
-#ifndef MBGL_UTIL_WORK_REQUEST
-#define MBGL_UTIL_WORK_REQUEST
+#pragma once
 
-#include <mbgl/util/noncopyable.hpp>
+#include <mbgl/util/async_request.hpp>
 
 #include <memory>
 
@@ -9,16 +8,14 @@ namespace mbgl {
 
 class WorkTask;
 
-class WorkRequest : public util::noncopyable {
+class WorkRequest : public AsyncRequest {
 public:
     using Task = std::shared_ptr<WorkTask>;
     WorkRequest(Task);
-    ~WorkRequest();
+    ~WorkRequest() override;
 
 private:
     std::shared_ptr<WorkTask> task;
 };
 
 } // namespace mbgl
-
-#endif

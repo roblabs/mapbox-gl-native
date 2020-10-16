@@ -24,9 +24,11 @@
 
 #include <cmath>
 
-using namespace mbgl;
+namespace mbgl {
 
-void matrix::identity(mat4& out) {
+namespace matrix {
+
+void identity(mat4& out) {
     out[0] = 1.0f;
     out[1] = 0.0f;
     out[2] = 0.0f;
@@ -45,27 +47,37 @@ void matrix::identity(mat4& out) {
     out[15] = 1.0f;
 }
 
-bool matrix::invert(mat4& out, mat4& a) {
-    double a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
-          a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
-          a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
-          a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15],
-
-          b00 = a00 * a11 - a01 * a10,
-          b01 = a00 * a12 - a02 * a10,
-          b02 = a00 * a13 - a03 * a10,
-          b03 = a01 * a12 - a02 * a11,
-          b04 = a01 * a13 - a03 * a11,
-          b05 = a02 * a13 - a03 * a12,
-          b06 = a20 * a31 - a21 * a30,
-          b07 = a20 * a32 - a22 * a30,
-          b08 = a20 * a33 - a23 * a30,
-          b09 = a21 * a32 - a22 * a31,
-          b10 = a21 * a33 - a23 * a31,
-          b11 = a22 * a33 - a23 * a32,
-
-          // Calculate the determinant
-          det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
+bool invert(mat4& out, const mat4& a) {
+    double a00 = a[0];
+    double a01 = a[1];
+    double a02 = a[2];
+    double a03 = a[3];
+    double a10 = a[4];
+    double a11 = a[5];
+    double a12 = a[6];
+    double a13 = a[7];
+    double a20 = a[8];
+    double a21 = a[9];
+    double a22 = a[10];
+    double a23 = a[11];
+    double a30 = a[12];
+    double a31 = a[13];
+    double a32 = a[14];
+    double a33 = a[15];
+    double b00 = a00 * a11 - a01 * a10;
+    double b01 = a00 * a12 - a02 * a10;
+    double b02 = a00 * a13 - a03 * a10;
+    double b03 = a01 * a12 - a02 * a11;
+    double b04 = a01 * a13 - a03 * a11;
+    double b05 = a02 * a13 - a03 * a12;
+    double b06 = a20 * a31 - a21 * a30;
+    double b07 = a20 * a32 - a22 * a30;
+    double b08 = a20 * a33 - a23 * a30;
+    double b09 = a21 * a32 - a22 * a31;
+    double b10 = a21 * a33 - a23 * a31;
+    double b11 = a22 * a33 - a23 * a32;
+    double // Calculate the determinant
+        det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
 
     if (!det) {
         return true;
@@ -92,10 +104,10 @@ bool matrix::invert(mat4& out, mat4& a) {
     return false;
 }
 
-void matrix::ortho(mat4& out, double left, double right, double bottom, double top, double near, double far) {
-    double lr = 1.0f / (left - right),
-          bt = 1.0f / (bottom - top),
-          nf = 1.0f / (near - far);
+void ortho(mat4& out, double left, double right, double bottom, double top, double near, double far) {
+    double lr = 1.0f / (left - right);
+    double bt = 1.0f / (bottom - top);
+    double nf = 1.0f / (near - far);
     out[0] = -2.0f * lr;
     out[1] = 0.0f;
     out[2] = 0.0f;
@@ -114,9 +126,9 @@ void matrix::ortho(mat4& out, double left, double right, double bottom, double t
     out[15] = 1.0f;
 }
 
-void matrix::perspective(mat4& out, double fovy, double aspect, double near, double far) {
-    double f = 1.0f / std::tan(fovy / 2.0f),
-          nf = 1.0f / (near - far);
+void perspective(mat4& out, double fovy, double aspect, double near, double far) {
+    double f = 1.0f / std::tan(fovy / 2.0f);
+    double nf = 1.0f / (near - far);
     out[0] = f / aspect;
     out[1] = 0.0f;
     out[2] = 0.0f;
@@ -135,7 +147,7 @@ void matrix::perspective(mat4& out, double fovy, double aspect, double near, dou
     out[15] = 0.0f;
 }
 
-void matrix::copy(mat4& out, const mat4& a) {
+void copy(mat4& out, const mat4& a) {
     out[0] = a[0];
     out[1] = a[1];
     out[2] = a[2];
@@ -154,16 +166,25 @@ void matrix::copy(mat4& out, const mat4& a) {
     out[15] = a[15];
 }
 
-void matrix::translate(mat4& out, const mat4& a, double x, double y, double z) {
+void translate(mat4& out, const mat4& a, double x, double y, double z) {
     if (&a == &out) {
         out[12] = a[0] * x + a[4] * y + a[8] * z + a[12];
         out[13] = a[1] * x + a[5] * y + a[9] * z + a[13];
         out[14] = a[2] * x + a[6] * y + a[10] * z + a[14];
         out[15] = a[3] * x + a[7] * y + a[11] * z + a[15];
     } else {
-        double a00, a01, a02, a03,
-              a10, a11, a12, a13,
-              a20, a21, a22, a23;
+        double a00;
+        double a01;
+        double a02;
+        double a03;
+        double a10;
+        double a11;
+        double a12;
+        double a13;
+        double a20;
+        double a21;
+        double a22;
+        double a23;
 
         a00 = a[0]; a01 = a[1]; a02 = a[2]; a03 = a[3];
         a10 = a[4]; a11 = a[5]; a12 = a[6]; a13 = a[7];
@@ -180,17 +201,17 @@ void matrix::translate(mat4& out, const mat4& a, double x, double y, double z) {
     }
 }
 
-void matrix::rotate_x(mat4& out, const mat4& a, double rad) {
-    double s = std::sin(rad),
-        c = std::cos(rad),
-        a10 = a[4],
-        a11 = a[5],
-        a12 = a[6],
-        a13 = a[7],
-        a20 = a[8],
-        a21 = a[9],
-        a22 = a[10],
-        a23 = a[11];
+void rotate_x(mat4& out, const mat4& a, double rad) {
+    double s = std::sin(rad);
+    double c = std::cos(rad);
+    double a10 = a[4];
+    double a11 = a[5];
+    double a12 = a[6];
+    double a13 = a[7];
+    double a20 = a[8];
+    double a21 = a[9];
+    double a22 = a[10];
+    double a23 = a[11];
 
     if (&a != &out) { // If the source and destination differ, copy the unchanged rows
         out[0]  = a[0];
@@ -214,17 +235,17 @@ void matrix::rotate_x(mat4& out, const mat4& a, double rad) {
     out[11] = a23 * c - a13 * s;
 }
 
-void matrix::rotate_y(mat4& out, const mat4& a, double rad) {
-    double s = std::sin(rad),
-        c = std::cos(rad),
-        a00 = a[0],
-        a01 = a[1],
-        a02 = a[2],
-        a03 = a[3],
-        a20 = a[8],
-        a21 = a[9],
-        a22 = a[10],
-        a23 = a[11];
+void rotate_y(mat4& out, const mat4& a, double rad) {
+    double s = std::sin(rad);
+    double c = std::cos(rad);
+    double a00 = a[0];
+    double a01 = a[1];
+    double a02 = a[2];
+    double a03 = a[3];
+    double a20 = a[8];
+    double a21 = a[9];
+    double a22 = a[10];
+    double a23 = a[11];
 
     if (&a != &out) { // If the source and destination differ, copy the unchanged rows
         out[4]  = a[4];
@@ -248,17 +269,17 @@ void matrix::rotate_y(mat4& out, const mat4& a, double rad) {
     out[11] = a03 * s + a23 * c;
 }
 
-void matrix::rotate_z(mat4& out, const mat4& a, double rad) {
-    double s = std::sin(rad),
-          c = std::cos(rad),
-          a00 = a[0],
-          a01 = a[1],
-          a02 = a[2],
-          a03 = a[3],
-          a10 = a[4],
-          a11 = a[5],
-          a12 = a[6],
-          a13 = a[7];
+void rotate_z(mat4& out, const mat4& a, double rad) {
+    double s = std::sin(rad);
+    double c = std::cos(rad);
+    double a00 = a[0];
+    double a01 = a[1];
+    double a02 = a[2];
+    double a03 = a[3];
+    double a10 = a[4];
+    double a11 = a[5];
+    double a12 = a[6];
+    double a13 = a[7];
 
     if (&a != &out) { // If the source and destination differ, copy the unchanged last row
         out[8]  = a[8];
@@ -282,7 +303,7 @@ void matrix::rotate_z(mat4& out, const mat4& a, double rad) {
     out[7] = a13 * c - a03 * s;
 }
 
-void matrix::scale(mat4& out, const mat4& a, double x, double y, double z) {
+void scale(mat4& out, const mat4& a, double x, double y, double z) {
     out[0] = a[0] * x;
     out[1] = a[1] * x;
     out[2] = a[2] * x;
@@ -301,14 +322,29 @@ void matrix::scale(mat4& out, const mat4& a, double x, double y, double z) {
     out[15] = a[15];
 }
 
-void matrix::multiply(mat4& out, const mat4& a, const mat4& b) {
-    double a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3],
-          a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7],
-          a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11],
-          a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+void multiply(mat4& out, const mat4& a, const mat4& b) {
+    double a00 = a[0];
+    double a01 = a[1];
+    double a02 = a[2];
+    double a03 = a[3];
+    double a10 = a[4];
+    double a11 = a[5];
+    double a12 = a[6];
+    double a13 = a[7];
+    double a20 = a[8];
+    double a21 = a[9];
+    double a22 = a[10];
+    double a23 = a[11];
+    double a30 = a[12];
+    double a31 = a[13];
+    double a32 = a[14];
+    double a33 = a[15];
 
     // Cache only the current line of the second matrix
-    double b0 = b[0], b1 = b[1], b2 = b[2], b3 = b[3];
+    double b0 = b[0];
+    double b1 = b[1];
+    double b2 = b[2];
+    double b3 = b[3];
     out[0] = b0 * a00 + b1 * a10 + b2 * a20 + b3 * a30;
     out[1] = b0 * a01 + b1 * a11 + b2 * a21 + b3 * a31;
     out[2] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
@@ -332,3 +368,18 @@ void matrix::multiply(mat4& out, const mat4& a, const mat4& b) {
     out[14] = b0 * a02 + b1 * a12 + b2 * a22 + b3 * a32;
     out[15] = b0 * a03 + b1 * a13 + b2 * a23 + b3 * a33;
 }
+
+void transformMat4(vec4& out, const vec4& a, const mat4& m) {
+    double x = a[0];
+    double y = a[1];
+    double z = a[2];
+    double w = a[3];
+    out[0] = m[0] * x + m[4] * y + m[8] * z + m[12] * w;
+    out[1] = m[1] * x + m[5] * y + m[9] * z + m[13] * w;
+    out[2] = m[2] * x + m[6] * y + m[10] * z + m[14] * w;
+    out[3] = m[3] * x + m[7] * y + m[11] * z + m[15] * w;
+}
+
+} // namespace matrix
+
+} // namespace mbgl

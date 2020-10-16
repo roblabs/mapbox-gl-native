@@ -1,37 +1,27 @@
-#ifndef MBGL_STORAGE_ONLINE_FILE_SOURCE
-#define MBGL_STORAGE_ONLINE_FILE_SOURCE
+#pragma once
 
 #include <mbgl/storage/file_source.hpp>
+#include <mbgl/util/optional.hpp>
 
 namespace mbgl {
 
-class SQLiteCache;
-
-namespace util {
-template <typename T> class Thread;
-} // namespace util
-
 class OnlineFileSource : public FileSource {
 public:
-    OnlineFileSource(SQLiteCache*);
+    OnlineFileSource();
     ~OnlineFileSource() override;
 
-    void setAccessToken(const std::string& t) { accessToken = t; }
-    std::string getAccessToken() const { return accessToken; }
-
-    std::unique_ptr<FileRequest> request(const Resource&, Callback) override;
-
 private:
-    friend class OnlineFileRequest;
-    friend class OnlineFileRequestImpl;
-
-    void cancel(FileRequest*);
+    // FileSource overrides
+    std::unique_ptr<AsyncRequest> request(const Resource&, Callback) override;
+    bool canRequest(const Resource&) const override;
+    void pause() override;
+    void resume() override;
+    void setProperty(const std::string&, const mapbox::base::Value&) override;
+    mapbox::base::Value getProperty(const std::string&) const override;
+    void setResourceTransform(ResourceTransform) override;
 
     class Impl;
-    const std::unique_ptr<util::Thread<Impl>> thread;
-    std::string accessToken;
+    const std::unique_ptr<Impl> impl;
 };
 
 } // namespace mbgl
-
-#endif

@@ -1,61 +1,150 @@
-#include <mbgl/geometry/line_atlas.hpp>
-#include <mbgl/platform/gl.hpp>
-#include <mbgl/platform/log.hpp>
-#include <mbgl/platform/platform.hpp>
-#include <mbgl/util/gl_object_store.hpp>
-#include <mbgl/util/thread_context.hpp>
-
-#include <boost/functional/hash.hpp>
-
-#include <sstream>
 #include <cmath>
+#include <mbgl/geometry/line_atlas.hpp>
+#include <mbgl/gfx/upload_pass.hpp>
+#include <mbgl/math/log2.hpp>
+#include <mbgl/math/minmax.hpp>
+#include <mbgl/util/hash.hpp>
+#include <mbgl/util/logging.hpp>
+#include <mbgl/util/platform.hpp>
 
-using namespace mbgl;
+namespace mbgl {
+namespace {
 
-LineAtlas::LineAtlas(GLsizei w, GLsizei h)
-    : width(w),
-      height(h),
-      data(std::make_unique<GLbyte[]>(w * h)),
-      dirty(true) {
-}
-
-LineAtlas::~LineAtlas() {
-    assert(util::ThreadContext::currentlyOn(util::ThreadType::Map));
-
-    if (texture) {
-        mbgl::util::ThreadContext::getGLObjectStore()->abandonTexture(texture);
-        texture = 0;
-    }
-}
-
-LinePatternPos LineAtlas::getDashPosition(const std::vector<float> &dasharray, bool round) {
-    assert(util::ThreadContext::currentlyOn(util::ThreadType::Map));
-
-    size_t key = round ? std::numeric_limits<size_t>::min() : std::numeric_limits<size_t>::max();
+size_t getDashPatternHash(const std::vector<float>& dasharray, const LinePatternCap patternCap) {
+    size_t key =
+        patternCap == LinePatternCap::Round ? std::numeric_limits<size_t>::min() : std::numeric_limits<size_t>::max();
     for (const float part : dasharray) {
-        boost::hash_combine<float>(key, part);
+        util::hash_combine<float>(key, part);
+    }
+    return key;
+}
+
+std::vector<DashRange> getDashRanges(const std::vector<float>& dasharray, float stretch) {
+    // If dasharray has an odd length, both the first and last parts
+    // are dashes and should be joined seamlessly.
+    const bool oddDashArray = dasharray.size() % 2 == 1;
+
+    float left = oddDashArray ? -dasharray.back() * stretch : 0.0f;
+    float right = dasharray.front() * stretch;
+    bool isDash = true;
+
+    std::vector<DashRange> ranges;
+    ranges.reserve(dasharray.size());
+    ranges.push_back({left, right, isDash, dasharray.front() == 0.0f});
+
+    float currentDashLength = dasharray.front();
+    for (size_t i = 1; i < dasharray.size(); ++i) {
+        isDash = !isDash;
+
+        const float dashLength = dasharray[i];
+        left = currentDashLength * stretch;
+        currentDashLength += dashLength;
+        right = currentDashLength * stretch;
+
+        ranges.push_back({left, right, isDash, dashLength == 0.0f});
     }
 
-    // Note: We're not handling hash collisions here.
-    const auto it = positions.find(key);
-    if (it == positions.end()) {
-        auto inserted = positions.emplace(key, addDash(dasharray, round));
-        assert(inserted.second);
-        return inserted.first->second;
-    } else {
-        return it->second;
+    return ranges;
+}
+
+void addRoundDash(
+    const std::vector<DashRange>& ranges, uint32_t yOffset, float stretch, const int n, AlphaImage& image) {
+    const float halfStretch = stretch * 0.5f;
+
+    if (ranges.empty()) return;
+
+    for (int y = -n; y <= n; y++) {
+        int row = static_cast<int32_t>(yOffset) + n + y;
+        const uint32_t index = image.size.width * row;
+        uint32_t currIndex = 0;
+        DashRange range = ranges[currIndex];
+
+        for (uint32_t x = 0; x < image.size.width; ++x) {
+            if (range.right == 0) {
+                if (x != 0 && ++currIndex < ranges.size()) {
+                    range = ranges[currIndex];
+                }
+            } else if (x / range.right > 1.0f && ++currIndex < ranges.size()) {
+                range = ranges[currIndex];
+            }
+
+            float distLeft = fabsf(x - range.left);
+            float distRight = fabsf(x - range.right);
+            float minDist = fminf(distLeft, distRight);
+            float signedDistance;
+
+            float distMiddle = static_cast<float>(y) / n * (halfStretch + 1.0f);
+            if (range.isDash) {
+                float distEdge = halfStretch - fabsf(distMiddle);
+                signedDistance = sqrtf(minDist * minDist + distEdge * distEdge);
+            } else {
+                signedDistance = halfStretch - sqrtf(minDist * minDist + distMiddle * distMiddle);
+            }
+
+            image.data[index + x] = static_cast<uint8_t>(fmaxf(0.0f, fminf(255.0f, signedDistance + 128.0f)));
+        }
     }
 }
 
-LinePatternPos LineAtlas::addDash(const std::vector<float> &dasharray, bool round) {
+void addRegularDash(std::vector<DashRange>& ranges, uint32_t yOffset, AlphaImage& image) {
+    // Collapse any zero-length range
+    for (auto it = ranges.begin(); it != ranges.end();) {
+        if (it->isZeroLength) {
+            it = ranges.erase(it);
+        } else {
+            ++it;
+        }
+    }
 
-    int n = round ? 7 : 0;
-    int dashheight = 2 * n + 1;
-    const uint8_t offset = 128;
+    if (ranges.empty()) return;
 
-    if (nextRow + dashheight > height) {
-        Log::Warning(Event::OpenGL, "line atlas bitmap overflow");
-        return LinePatternPos();
+    if (ranges.size() > 1) {
+        // Collapse neighbouring same-type parts into a single part
+        for (auto curr = ranges.begin(), next = ranges.begin() + 1; next != ranges.end();) {
+            if (next->isDash == curr->isDash) {
+                next->left = curr->left;
+                curr = ranges.erase(curr);
+            } else {
+                ++curr;
+            }
+            next = curr + 1;
+        }
+    }
+
+    DashRange& first = ranges.front();
+    DashRange& last = ranges.back();
+    if (first.isDash == last.isDash) {
+        first.left = last.left - image.size.width;
+        last.right = first.right + image.size.width;
+    }
+
+    const uint32_t index = image.size.width * yOffset;
+    uint32_t currIndex = 0;
+    DashRange range = ranges[currIndex];
+
+    for (uint32_t x = 0; x < image.size.width; ++x) {
+        if (x / range.right > 1.0f && ++currIndex < ranges.size()) {
+            range = ranges[currIndex];
+        }
+
+        float distLeft = fabsf(x - range.left);
+        float distRight = fabsf(x - range.right);
+        float minDist = fminf(distLeft, distRight);
+        float signedDistance = range.isDash ? minDist : -minDist;
+
+        image.data[index + x] = static_cast<uint8_t>(fmaxf(0.0f, fminf(255.0f, signedDistance + 128.0f)));
+    }
+}
+
+LinePatternPos addDashPattern(AlphaImage& image,
+                              uint32_t yOffset,
+                              const std::vector<float>& dasharray,
+                              const LinePatternCap patternCap) {
+    const uint8_t n = patternCap == LinePatternCap::Round ? 7 : 0;
+
+    if (dasharray.size() < 2) {
+        Log::Warning(Event::ParseStyle, "line dasharray requires at least two elements");
+        return {};
     }
 
     float length = 0;
@@ -63,123 +152,106 @@ LinePatternPos LineAtlas::addDash(const std::vector<float> &dasharray, bool roun
         length += part;
     }
 
-    float stretch = width / length;
-    float halfWidth = stretch * 0.5;
-    // If dasharray has an odd length, both the first and last parts
-    // are dashes and should be joined seamlessly.
-    bool oddLength = dasharray.size() % 2 == 1;
+    float stretch = image.size.width / length;
+    std::vector<DashRange> ranges = getDashRanges(dasharray, stretch);
 
-    for (int y = -n; y <= n; y++) {
-        int row = nextRow + n + y;
-        int index = width * row;
-
-        float left = 0;
-        float right = dasharray[0];
-        unsigned int partIndex = 1;
-
-        if (oddLength) {
-            left -= dasharray.back();
-        }
-
-        for (int x = 0; x < width; x++) {
-
-            while (right < x / stretch) {
-                left = right;
-                right = right + dasharray[partIndex];
-
-                if (oddLength && partIndex == dasharray.size() - 1) {
-                    right += dasharray.front();
-                }
-
-                partIndex++;
-            }
-
-            float distLeft = fabs(x - left * stretch);
-            float distRight = fabs(x - right * stretch);
-            float dist = fmin(distLeft, distRight);
-            bool inside = (partIndex % 2) == 1;
-            int signedDistance;
-
-            if (round) {
-                float distMiddle = n ? (float)y / n * (halfWidth + 1) : 0;
-                if (inside) {
-                    float distEdge = halfWidth - fabs(distMiddle);
-                    signedDistance = sqrt(dist * dist + distEdge * distEdge);
-                } else {
-                    signedDistance = halfWidth - sqrt(dist * dist + distMiddle * distMiddle);
-                }
-
-            } else {
-                signedDistance = int((inside ? 1 : -1) * dist);
-            }
-
-            data[index + x] = fmax(0, fmin(255, signedDistance + offset));
-        }
+    if (patternCap == LinePatternCap::Round) {
+        addRoundDash(ranges, yOffset, stretch, n, image);
+    } else {
+        addRegularDash(ranges, yOffset, image);
     }
 
     LinePatternPos position;
-    position.y = (0.5 + nextRow + n) / height;
-    position.height = (2.0 * n) / height;
+    position.y = (0.5f + yOffset + n) / image.size.height;
+    position.height = (2.0f * n + 1) / image.size.height;
     position.width = length;
 
-    nextRow += dashheight;
-
-    dirty = true;
-    bind();
-
     return position;
-};
+}
 
-void LineAtlas::upload() {
-    if (dirty) {
-        bind();
+} // namespace
+
+DashPatternTexture::DashPatternTexture(const std::vector<float>& from_,
+                                       const std::vector<float>& to_,
+                                       const LinePatternCap cap) {
+    const bool patternsIdentical = from_ == to_;
+    const uint32_t patternHeight = cap == LinePatternCap::Round ? 15 : 1;
+    const uint32_t height = (patternsIdentical ? 1 : 2) * patternHeight;
+
+    // The OpenGL ES 2.0 spec, section 3.8.2 states:
+    //
+    //     Calling a sampler from a fragment shader will return (R,G,B,A) = (0,0,0,1) if any of the
+    //     following conditions are true:
+    //     […]
+    //     - A two-dimensional sampler is called, the corresponding texture image is a
+    //       non-power-of-two image […], and either the texture wrap mode is not CLAMP_TO_EDGE, or
+    //       the minification filter is neither NEAREST nor LINEAR.
+    //     […]
+    //
+    // This means that texture lookups won't work for NPOT textures unless they use GL_CLAMP_TO_EDGE.
+    // We're using GL_CLAMP_TO_EDGE for the vertical direction, but GL_REPEAT for the horizontal
+    // direction, which means that we need a power-of-two texture for our line dash patterns to work
+    // on OpenGL ES 2.0 conforming implementations. Fortunately, this just means changing the height
+    // from 15 to 16, and from 30 to 32, so we don't waste many pixels.
+    const uint32_t textureHeight = 1 << util::ceil_log2(height);
+    AlphaImage image({256, textureHeight});
+
+    from = addDashPattern(image, 0, from_, cap);
+    to = patternsIdentical ? from : addDashPattern(image, patternHeight, to_, cap);
+
+    texture = std::move(image);
+}
+
+void DashPatternTexture::upload(gfx::UploadPass& uploadPass) {
+    if (texture.is<AlphaImage>()) {
+        texture = uploadPass.createTexture(texture.get<AlphaImage>());
     }
 }
 
-void LineAtlas::bind() {
-    assert(util::ThreadContext::currentlyOn(util::ThreadType::Map));
+gfx::TextureBinding DashPatternTexture::textureBinding() const {
+    // The texture needs to have been uploaded already.
+    assert(texture.is<gfx::Texture>());
+    return {texture.get<gfx::Texture>().getResource(),
+            gfx::TextureFilterType::Linear,
+            gfx::TextureMipMapType::No,
+            gfx::TextureWrapType::Repeat,
+            gfx::TextureWrapType::Clamp};
+}
 
-    bool first = false;
-    if (!texture) {
-        MBGL_CHECK_ERROR(glGenTextures(1, &texture));
-        MBGL_CHECK_ERROR(glBindTexture(GL_TEXTURE_2D, texture));
-        MBGL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR));
-        MBGL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR));
-        MBGL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT));
-        MBGL_CHECK_ERROR(glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE));
-        first = true;
+Size DashPatternTexture::getSize() const {
+    return texture.match([](const auto& obj) { return obj.size; });
+}
+
+LineAtlas::LineAtlas() = default;
+
+LineAtlas::~LineAtlas() = default;
+
+DashPatternTexture& LineAtlas::getDashPatternTexture(const std::vector<float>& from,
+                                                     const std::vector<float>& to,
+                                                     const LinePatternCap cap) {
+    const size_t hash = util::hash(getDashPatternHash(from, cap), getDashPatternHash(to, cap));
+
+    // Note: We're not handling hash collisions here.
+    const auto it = textures.find(hash);
+    if (it == textures.end()) {
+        auto inserted = textures.emplace(
+            std::piecewise_construct, std::forward_as_tuple(hash), std::forward_as_tuple(from, to, cap));
+        assert(inserted.second);
+        needsUpload.emplace_back(hash);
+        return inserted.first->second;
     } else {
-        MBGL_CHECK_ERROR(glBindTexture(GL_TEXTURE_2D, texture));
+        return it->second;
     }
+}
 
-    if (dirty) {
-        if (first) {
-            MBGL_CHECK_ERROR(glTexImage2D(
-                GL_TEXTURE_2D, // GLenum target
-                0, // GLint level
-                GL_ALPHA, // GLint internalformat
-                width, // GLsizei width
-                height, // GLsizei height
-                0, // GLint border
-                GL_ALPHA, // GLenum format
-                GL_UNSIGNED_BYTE, // GLenum type
-                data.get() // const GLvoid * data
-            ));
-        } else {
-            MBGL_CHECK_ERROR(glTexSubImage2D(
-                GL_TEXTURE_2D, // GLenum target
-                0, // GLint level
-                0, // GLint xoffset
-                0, // GLint yoffset
-                width, // GLsizei width
-                height, // GLsizei height
-                GL_ALPHA, // GLenum format
-                GL_UNSIGNED_BYTE, // GLenum type
-                data.get() // const GLvoid *pixels
-            ));
+void LineAtlas::upload(gfx::UploadPass& uploadPass) {
+    for (const size_t hash : needsUpload) {
+        const auto it = textures.find(hash);
+        if (it != textures.end()) {
+            it->second.upload(uploadPass);
         }
-
-
-        dirty = false;
     }
-};
+    needsUpload.clear();
+}
+
+} // namespace mbgl

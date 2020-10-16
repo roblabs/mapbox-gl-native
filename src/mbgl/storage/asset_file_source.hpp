@@ -1,5 +1,4 @@
-#ifndef MBGL_STORAGE_ASSET_FILE_SOURCE
-#define MBGL_STORAGE_ASSET_FILE_SOURCE
+#pragma once
 
 #include <mbgl/storage/file_source.hpp>
 
@@ -11,16 +10,18 @@ template <typename T> class Thread;
 
 class AssetFileSource : public FileSource {
 public:
-    AssetFileSource(const std::string& assetRoot);
+    AssetFileSource(const std::string& root);
     ~AssetFileSource() override;
 
-    std::unique_ptr<FileRequest> request(const Resource&, Callback) override;
+    std::unique_ptr<AsyncRequest> request(const Resource&, Callback) override;
+    bool canRequest(const Resource&) const override;
+    void pause() override;
+    void resume() override;
 
 private:
     class Impl;
-    std::unique_ptr<util::Thread<Impl>> thread;
+
+    std::unique_ptr<util::Thread<Impl>> impl;
 };
 
 } // namespace mbgl
-
-#endif // MBGL_STORAGE_ASSET_FILE_SOURCE

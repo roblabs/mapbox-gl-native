@@ -1,12 +1,17 @@
-#ifndef MBGL_STORAGE_RESOURCE
-#define MBGL_STORAGE_RESOURCE
+#pragma once
+
+#include <mbgl/storage/response.hpp>
+#include <mbgl/util/bitmask_operations.hpp>
+#include <mbgl/util/optional.hpp>
+#include <mbgl/util/font_stack.hpp>
+#include <mbgl/util/tileset.hpp>
 
 #include <string>
-#include <functional>
 
 namespace mbgl {
 
-struct Resource {
+class Resource {
+public:
     enum Kind : uint8_t {
         Unknown = 0,
         Style,
@@ -14,24 +19,90 @@ struct Resource {
         Tile,
         Glyphs,
         SpriteImage,
-        SpriteJSON
+        SpriteJSON,
+        Image
     };
 
-    const Kind kind;
-    const std::string url;
+    enum class Priority : bool {
+        Regular,
+        Low
+    };
 
-    inline bool operator==(const Resource &res) const {
-        return kind == res.kind && url == res.url;
+    enum class Usage : bool {
+        Online,
+        Offline
+    };
+
+    enum class StoragePolicy : bool { Permanent, Volatile };
+
+    struct TileData {
+        std::string urlTemplate;
+        uint8_t pixelRatio;
+        int32_t x;
+        int32_t y;
+        int8_t z;
+    };
+
+    enum class LoadingMethod : uint8_t {
+        None        = 0b00,
+        Cache       = 0b01,
+        Network     = 0b10,
+
+        CacheOnly   = Cache,
+        NetworkOnly = Network,
+        All         = Cache | Network,
+    };
+
+    Resource(Kind kind_,
+             std::string url_,
+             optional<TileData> tileData_ = {},
+             LoadingMethod loadingMethod_ = LoadingMethod::All)
+        : kind(kind_),
+          loadingMethod(loadingMethod_),
+          url(std::move(url_)),
+          tileData(std::move(tileData_)) {
     }
 
-    struct Hash {
-        std::size_t operator()(Resource const& r) const {
-            return std::hash<std::string>()(r.url) ^ (std::hash<uint8_t>()(r.kind) << 1);
-        }
-    };
+    void setPriority(Priority p) { priority = p; }
+    void setUsage(Usage u) { usage = u; }
 
+    bool hasLoadingMethod(LoadingMethod method) const;
+
+    static Resource style(const std::string& url);
+    static Resource source(const std::string& url);
+    static Resource tile(const std::string& urlTemplate,
+                         float pixelRatio,
+                         int32_t x,
+                         int32_t y,
+                         int8_t z,
+                         Tileset::Scheme scheme,
+                         LoadingMethod = LoadingMethod::All);
+    static Resource glyphs(const std::string& urlTemplate,
+                           const FontStack& fontStack,
+                           const std::pair<uint16_t, uint16_t>& glyphRange);
+    static Resource spriteImage(const std::string& base, float pixelRatio);
+    static Resource spriteJSON(const std::string& base, float pixelRatio);
+    static Resource image(const std::string& url);
+
+    Kind kind;
+    LoadingMethod loadingMethod;
+    Usage usage{ Usage::Online };
+    Priority priority{ Priority::Regular };
+    std::string url;
+
+    // Includes auxiliary data if this is a tile request.
+    optional<TileData> tileData;
+
+    optional<Timestamp> priorModified = {};
+    optional<Timestamp> priorExpires = {};
+    optional<std::string> priorEtag = {};
+    std::shared_ptr<const std::string> priorData;
+    Duration minimumUpdateInterval{Duration::zero()};
+    StoragePolicy storagePolicy{StoragePolicy::Permanent};
 };
 
-} // namespace mbgl
+inline bool Resource::hasLoadingMethod(Resource::LoadingMethod method) const {
+    return (loadingMethod & method);
+}
 
-#endif
+} // namespace mbgl

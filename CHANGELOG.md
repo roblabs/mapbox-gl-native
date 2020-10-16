@@ -1,203 +1,515 @@
 # Changelog
 
-## Android master
+## master
 
-* Fixed crash caused by annotation image with non-integer width or height ([#3031](https://github.com/mapbox/mapbox-gl-native/issues/3031))
+## maps-v1.6.0
 
-## 3.1.0
+### ✨ New features
 
-* Camera API Callback Improvements ([#3412](https://github.com/mapbox/mapbox-gl-native/issues/3412))
-* Coordinate Deprecated For LatLng ([#3309](https://github.com/mapbox/mapbox-gl-native/issues/3309))
-* Responsive User Dot Location Tracking ([#2049](https://github.com/mapbox/mapbox-gl-native/issues/2049))
+- [core] Add support for `Polygon`, `MultiPolygon` geometry types in `distance` expression. ([#16446](https://github.com/mapbox/mapbox-gl-native/pull/16446))
 
-## 3.0.0
+- [core] Introduce a new API for controlling the camera ([#16419]https://github.com/mapbox/mapbox-gl-native/pull/16419)
 
-* Added Camera API ([#3244](https://github.com/mapbox/mapbox-gl-native/issues/3244))
-* Custom Layer Support ([#3248](https://github.com/mapbox/mapbox-gl-native/issues/3348))
-* Reverse Tilt Gesutre Detection ([#3245](https://github.com/mapbox/mapbox-gl-native/issues/3245))
-* Decoupled Location Provider ([#2954](https://github.com/mapbox/mapbox-gl-native/issues/2954))
+  Functions `Map::getFreeCameraOptions()` and `Map::setFreeCameraOptions(options)` provides an alternative way of accessing and modifying properties of the underlying camera entity. The API allows the user to treat the camera as a more traditional 3D object by modifying its position and orientation directly as opposed to setting the state implicitly by using `CameraOptions`. Both APIs are fully compatible with each other.
 
-## 2.3.0
+### 🐞 Bug fixes
 
-* Added Tilt / Pitch Support ([#2805](https://github.com/mapbox/mapbox-gl-native/issues/2805))
-* Keep InfoWindow Open When Panning ([#3121](https://github.com/mapbox/mapbox-gl-native/issues/3121))
-* Concurrent Multiple Open InfoWindows ([#3115](https://github.com/mapbox/mapbox-gl-native/issues/3115))
-* OkHttp Replace curl ([#2856](https://github.com/mapbox/mapbox-gl-native/issues/2856))
-* GPS and Compass Customization Support ([#2858](https://github.com/mapbox/mapbox-gl-native/issues/2858))
+- [core][tile mode] Labels priority fixes ([#16432](https://github.com/mapbox/mapbox-gl-native/pull/16432))
 
-## 2.2.0
+  This change does the following:
 
-- New User Dot location graphics ([#2732](https://github.com/mapbox/mapbox-gl-native/issues/2732))
-- Custom Drawable Markers ([#2744](https://github.com/mapbox/mapbox-gl-native/issues/2744))
-- `MapView.setOnInfoWindowClickListener()` support ([#2448](https://github.com/mapbox/mapbox-gl-native/issues/2448))
-- Completed Annotations API ([#1716](https://github.com/mapbox/mapbox-gl-native/issues/1716))
-- Satellite Streets Style ([#2739](https://github.com/mapbox/mapbox-gl-native/issues/2739))
-- **RESOLVED** Black Screen On Ice Cream Sandwich and Jelly Bean devices ([#2802](https://github.com/mapbox/mapbox-gl-native/issues/2802))
+  - strictly arranges all the intersecting labels accordingly to the style-defined priorities
+  - fixes placement order of the variable labels.
+    Before this change, all variable labels that could potentially intersect tile borders were placed first, breaking the style label placement priority order. Now, all the variable labels, which do not actually intersect the tile borders, are placed accordingly to the style-defined priorities
 
+## maps-v1.6.0-rc.2
 
-## 2.1.0
+### ✨ New features
 
-- Initial Android release. 
+- [core] Introduce Source::setMinimumTileUpdateInterval API ([#16416](https://github.com/mapbox/mapbox-gl-native/pull/16416))
 
-Known issues: 
+  The `Source::setMinimumTileUpdateInterval(Duration)` method sets the minimum tile update interval, which is used to throttle the tile update network requests.
 
-- Black Screen On Ice Cream Sandwich and Jelly Bean devices ([#2802](https://github.com/mapbox/mapbox-gl-native/issues/2802))
-  - Resolved in 2.2.0
+  The corresponding `Source::getMinimumTileUpdateInterval()` getter is added too.
 
-## iOS master
+  Default minimum tile update interval value is `Duration::zero()`.
 
-- Fixed an issue causing the entire MGLMapView to leak. ([#3447](https://github.com/mapbox/mapbox-gl-native/pull/3447))
-- `MGLMapView` methods that alter the viewport now accept optional completion handlers. ([#3090](https://github.com/mapbox/mapbox-gl-native/pull/3090))
-- You can now modify an annotation’s image after adding the annotation to the map. ([#3146](https://github.com/mapbox/mapbox-gl-native/pull/3146))
-- Tapping now selects annotations more reliably. Tapping near the top of a large annotation image now selects that annotation. An annotation image’s alignment insets influence how far away the user can tap and still select the annotation. For example, if your annotation image has a large shadow, you can keep that shadow from being tappable by excluding it from the image’s alignment rect. ([#3261](https://github.com/mapbox/mapbox-gl-native/pull/3261))
-- A new method on MGLMapView, `-flyToCamera:withDuration:completionHandler:`, lets you transition between viewpoints along an arc as if by aircraft. ([#3171](https://github.com/mapbox/mapbox-gl-native/pull/3171), [#3301](https://github.com/mapbox/mapbox-gl-native/pull/3301))
-- MGLMapCamera’s `altitude` values now match those of MKMapCamera. ([#3362](https://github.com/mapbox/mapbox-gl-native/pull/3362))
-- MGLMapView properties like `centerCoordinate` and `camera` now offset the center to account for any translucent top or bottom bar. As a result, when user tracking is enabled and the map view is an immediate child of a view controller, the user dot is centered in the unobscured portion of the map view. To override this offset, modify the `contentInset` property; you may also need to set the containing view controller’s `automaticallyAdjustsScrollViewInsets` property to `NO`. ([#3583](https://github.com/mapbox/mapbox-gl-native/pull/3583))
-- In user tracking mode, the user dot stays in a fixed position within MGLMapView while the map pans smoothly. A new property, `userLocationVerticalAlignment`, determines the user dot’s fixed position. ([#3589](https://github.com/mapbox/mapbox-gl-native/pull/3589))
-- Zooming and rotation gestures no longer disable user tracking mode. ([#3589](https://github.com/mapbox/mapbox-gl-native/pull/3589))
-- User tracking mode starts out at a lower zoom level by default. ([#3589](https://github.com/mapbox/mapbox-gl-native/pull/3589))
-- Fixed an issue with small map views not properly fitting annotations within bounds. (#[3407](https://github.com/mapbox/mapbox-gl-native/pull/3407))
-- When the user rotates the map to within 7° of true north, the map view now snaps to true north. ([#3403](https://github.com/mapbox/mapbox-gl-native/pull/3403))
-- The map view’s background can now be transparent or translucent, as long as the style’s background layer is transparent or translucent and `MGLMapView.opaque` is set to `NO`. ([#3096](https://github.com/mapbox/mapbox-gl-native/pull/3096))
-- Documentation is now generated by [jazzy](https://github.com/realm/jazzy) instead of appledoc. ♪♫ ([#3203](https://github.com/mapbox/mapbox-gl-native/pull/3203))
-- New API to provide a custom callout view to the map for annotations. ([#3456](https://github.com/mapbox/mapbox-gl-native/pull/3456))
-- Made telemetry on/off setting available in-app. ([#3445](https://github.com/mapbox/mapbox-gl-native/pull/3445))
-- Fixed an issue with users not being counted by Mapbox if they had disabled telemetry. ([#3495](https://github.com/mapbox/mapbox-gl-native/pull/3495))
-- Fixed crash caused by MGLAnnotationImage with non-integer width or height ([#2198](https://github.com/mapbox/mapbox-gl-native/issues/2198))
+- [core] Indroduce `distance` expression. ([#16397](https://github.com/mapbox/mapbox-gl-native/pull/16397))
+   
+  The `distance` expression returns the shortest distance between two geometries. The returned value can be consumed as an input into another expression for changing a paint or layout property or filtering features by distance.
 
-## iOS 3.0.1
+  Currently, the `distance` expression supports `Point`, `MultiPoint`, `LineString`, `MultiLineString` geometry types.
 
-- Fixed CoreTelephony.framework crash. ([#3170](https://github.com/mapbox/mapbox-gl-native/pull/3170))
-- Fixed an issue preventing the compass from responding to taps after the compass is moved programmatically. ([#3117](https://github.com/mapbox/mapbox-gl-native/pull/3117))
-- CocoaPods is now distributed via a (static) framework. ([#3181](https://github.com/mapbox/mapbox-gl-native/issues/3181))
+- [core] Introduce style::Source::setVolatile()/isVolatile() API ([#16422](https://github.com/mapbox/mapbox-gl-native/pull/16422))
 
-## iOS 3.0.0
+  The `Source::setVolatile(bool)` method sets a flag defining whether or not the fetched tiles for the given source should be stored in the local cache.
 
-- If you install this SDK via CocoaPods, CocoaPods version 0.38.0 or above is required. ([#2132](https://github.com/mapbox/mapbox-gl-native/pull/2132))
-- The `styleID` property has been removed from MGLMapView. Instead, set the `styleURL` property to an NSURL in the form `mapbox://styles/STYLE_ID`. If you previously set the style ID in Interface Builder’s Attributes inspector, delete the `styleID` entry from the User Defined Runtime Attributes section of the Identity inspector, then set the new “Style URL” inspectable to a value in the form `mapbox://styles/STYLE_ID`. ([#2632](https://github.com/mapbox/mapbox-gl-native/pull/2632))
-- Default styles such as Streets are no longer bundled with the SDK; instead, they are loaded at runtime from the style API on mapbox.com. As always, you can use these default styles with any valid access token, and Streets continues to be `MGLMapView`’s initial style. The `bundledStyleURLs` property on `MGLMapView` has been deprecated in favor of several class methods on `MGLStyle` that provide direct access to the default styles. ([#2746](https://github.com/mapbox/mapbox-gl-native/pull/2746))
-- The SDK now builds with Bitcode enabled. A version of libMapbox.a with Bitcode disabled is also available. ([#2332](https://github.com/mapbox/mapbox-gl-native/issues/2332), [#3003](https://github.com/mapbox/mapbox-gl-native/pull/3003))
-- The style URL can be set to a local resource: `asset://local-color.json` and `local-color.json` both resolve to a file named `local-color.json` in the application’s root folder. ([#3087](https://github.com/mapbox/mapbox-gl-native/pull/3087))
-- The double-tap-drag gesture for zooming in and out is now consistent with the Google Maps SDK. ([#2153](https://github.com/mapbox/mapbox-gl-native/pull/2153))
-- A new `MGLAnnotationImage.enabled` property allows you to disable touch events on individual annotations. ([#2501](https://github.com/mapbox/mapbox-gl-native/pull/2501))
-- Fixed a rendering issue that caused one-way arrows along tile boundaries to point due east instead of in the direction of travel. ([#2530](https://github.com/mapbox/mapbox-gl-native/pull/2530))
-- Fixed an issue that prevented zoom level–dependent style properties from updating after zooming programmatically with animation. ([#2951](https://github.com/mapbox/mapbox-gl-native/pull/2951))
-- Performance and appearance improvements during annotation adds & removes. ([#1688](https://github.com/mapbox/mapbox-gl-native/issues/1688))
-- Overall improved performance during renders by not rendering faster than necessary. ([#1975](https://github.com/mapbox/mapbox-gl-native/issues/1975))
-- Fixed a rendering issue with styles that use the `background-pattern` property. ([#2531](https://github.com/mapbox/mapbox-gl-native/pull/2531))
-- Fixed a crash when reusing a single `MGLMapView` across multiple `UIViewController`s. ([#2969](https://github.com/mapbox/mapbox-gl-native/pull/2969))
-- Fixed a crash on iPod touch and other devices or simulators without a cell carrier. ([#2687](https://github.com/mapbox/mapbox-gl-native/issues/2687))
-- Eliminated flickering when opening and closing an overlay, such as an alert or action sheet. ([#2309](https://github.com/mapbox/mapbox-gl-native/pull/2309))
-- Labels can now line wrap on hyphens and other punctuation. ([#2598](https://github.com/mapbox/mapbox-gl-native/pull/2598))
-- A new delegate callback was added for observing taps to annotation callout views. ([#2596](https://github.com/mapbox/mapbox-gl-native/pull/2596))
-- `-mapViewRegionIsChanging:` is now sent to the map view’s delegate during gestures. ([#2700](https://github.com/mapbox/mapbox-gl-native/pull/2700))
-- Improved gesture recognition while the map is tilted. ([#2770](https://github.com/mapbox/mapbox-gl-native/pull/2770))
-- `-mapViewWillStartLoadingMap:` and `-mapViewDidFinishLoadingMap:` delegate methods now work. ([#2706](https://github.com/mapbox/mapbox-gl-native/pull/2706))
-- Removed CoreTelephony.framework dependency. ([#2581](https://github.com/mapbox/mapbox-gl-native/pull/2581))
-- Improved user location annotation responsiveness. ([#2643](https://github.com/mapbox/mapbox-gl-native/pull/2643))
+  The corresponding `Source::isVolatile()` getter is added too.
 
-## iOS 2.1.2
+  By default, the source is not volatile.
 
-- Built with Xcode 6.4 to not yet trigger Bitcode compatibility until Xcode 7 stabilizes. ([#2332](https://github.com/mapbox/mapbox-gl-native/issues/2332))
+- [ios, macos] Allow specifying multiple fonts or font families for local font rendering ([#16253](https://github.com/mapbox/mapbox-gl-native/pull/16253))
 
-## iOS 2.1.1
+  By default, CJK characters are now set in the font specified by the `text-font` layout property. If the named font is not installed on the device or bundled with the application, the characters are set in one of the fallback fonts passed into the `localFontFamily` parameter of `mbgl::Renderer::Renderer()` and `mbgl::MapSnapshotter::MapSnapshotter()`. This parameter can now contain a list of font family names, font display names, and font PostScript names, each name separated by a newline.
 
-- Fixes for Xcode 7 and Bitcode. ([#2238](https://github.com/mapbox/mapbox-gl-native/pull/2238))
+### 🐞 Bug fixes
 
-## iOS 2.1.0
+- [ios, macos] Fixed error receiving local file URL response ([#16428](https://github.com/mapbox/mapbox-gl-native/pull/16428))
 
-- A two-finger vertical swipe now tilts the map into perspective mode. ([#2116](https://github.com/mapbox/mapbox-gl-native/pull/2116))
-- A new `MGLMapCamera` API allows you to transition multiple viewpoint properties, including rotation and pitch, simultaneously with an optional custom duration and timing function. ([#2193](https://github.com/mapbox/mapbox-gl-native/pull/2193))
-- A new user tracking mode, `MGLUserTrackingModeFollowWithCourse`, has been added for indicating the current direction of travel. ([#2068](https://github.com/mapbox/mapbox-gl-native/pull/2068))
-- Version 8 (`v8`) of the [Mapbox GL style spec](https://www.mapbox.com/mapbox-gl-style-spec/) is now required. If you are using a custom `v7` style, it needs to be upgraded using [this migrator script](https://github.com/mapbox/mapbox-gl-style-spec/blob/mb-pages/migrations/v7.js). ([#2052](https://github.com/mapbox/mapbox-gl-native/pull/2052))
-- Applications built with Mapbox GL no longer crash when Location Services launches them in background mode. ([#1821](https://github.com/mapbox/mapbox-gl-native/pull/1821), [#1869](https://github.com/mapbox/mapbox-gl-native/pull/1869))
-- Fixed a crash when adding annotations to an `MGLMapView` inside `-viewDidLoad`. ([#1874](https://github.com/mapbox/mapbox-gl-native/pull/1874))
-- The user location annotation view now indicates the location reading’s accuracy and the device’s heading. ([#2010](https://github.com/mapbox/mapbox-gl-native/pull/2010))
-- Eliminated linker warnings and errors when building against the iOS 9.0 SDK in Xcode 7. ([#1962](https://github.com/mapbox/mapbox-gl-native/pull/1962))
-- Worked around a bug in the iOS 9.0 SDK that caused a crash on launch. ([#1958](https://github.com/mapbox/mapbox-gl-native/pull/1958))
-- User location tracking no longer sends `MGLMapView` into an invalid region on iOS 9. ([#1925](https://github.com/mapbox/mapbox-gl-native/pull/1925))
-- Eliminated console spew in the iOS demo application that was related to Mapbox Metrics HTTP requests. ([#1937](https://github.com/mapbox/mapbox-gl-native/issues/1937))
-- Implemented `-[MGLMapView showAnnotations:animated:]`. ([#2050](https://github.com/mapbox/mapbox-gl-native/pull/2050))
-- Fixed a crash adding a shape annotation with zero points. ([#2098](https://github.com/mapbox/mapbox-gl-native/pull/2098))
-- Debug mode now displays information useful for debugging the label collision algorithm. ([#1808](https://github.com/mapbox/mapbox-gl-native/pull/1808))
-- Minor style updates. ([#1910](https://github.com/mapbox/mapbox-gl-native/pull/1910))
-- The CocoaPods pod now contains a `README.md` file. ([#1886](https://github.com/mapbox/mapbox-gl-native/pull/1886))
+- [ios, macos] Corrected metrics of locally rendered fonts ([#16253](https://github.com/mapbox/mapbox-gl-native/pull/16253))
 
-## iOS 2.0.0
+  CJK characters are now laid out according to the font, so fonts with nonsquare glyphs have the correct kerning. This also fixes an issue where the baseline for CJK characters was too low compared to non-CJK characters.
 
-Repackaging 2.0.0-pre.1 as it contained no issues. 
+## maps-v1.6.0-rc.1
 
-## iOS 2.0.0-pre.1
+### ✨ New features
 
-Repackaging 0.5.1 as the Mapbox iOS SDK 2.0.0 series. 
+- [core] Move logging off the main thread ([#16325](https://github.com/mapbox/mapbox-gl-native/pull/16325))
 
-## 0.5.1
+- Add source property to limit parent's tile overscale factor ([#16347](https://github.com/mapbox/mapbox-gl-native/pull/16347))
 
-### iOS
+  The new property sets a limit for how much parent tile can be overscaled.
 
-- Added support for CocoaPods 0.38.0. ([#1876](https://github.com/mapbox/mapbox-gl-native/pull/1876))
+- [core][tile mode] Introduce API to collect placed symbols data ([#16339](https://github.com/mapbox/mapbox-gl-native/pull/16339))
 
-## 0.5.0
+  The following methods are added to the `Renderer` class in implemented in the Tile map mode:
+  - `collectPlacedSymbolData()`
+    enables or disables collecting of the placed symbols data
 
-### Core
+  - `getPlacedSymbolsData()`
+    if collecting of the placed symbols data is enabled, returns the reference to the `PlacedSymbolData` vector holding the collected data.
 
-- Support for runtime marker imagery. ([#941](https://github.com/mapbox/mapbox-gl-native/pull/941))
-- Added `Map::fitBounds()` for region-based viewport setting. ([#1092](https://github.com/mapbox/mapbox-gl-native/issues/1092))
-- Added a raster satellite bundled style and improved raster rendering. ([#963](https://github.com/mapbox/mapbox-gl-native/issues/963))
-- Improved round line joins for semi-transparent lines. ([#1839](https://github.com/mapbox/mapbox-gl-native/pull/1839))
-- Improved map render lifecycle notifications. ([#1026](https://github.com/mapbox/mapbox-gl-native/issues/1026))
-- Fixed a bug that caused annotations not to show at zoom level zero. ([#1279](https://github.com/mapbox/mapbox-gl-native/issues/1279))
-- Fixed a bug with the ordering of shape layers. ([#1866](https://github.com/mapbox/mapbox-gl-native/pull/1866))
-- Other bug fixes and performance improvements. 
+- [core] Enable circle-sort-key property ([#15875](https://github.com/mapbox/mapbox-gl-native/pull/15875/))
 
-### iOS
+  Adds support for `circle-sort-key` property, consistent with `symbol-sort-key`.
 
-- **Breaking:** Headers now make use of lightweight generics, eliminating many unnecessary casts when working with annotations in Swift 2.0 in Xcode 7. ([#1711](https://github.com/mapbox/mapbox-gl-native/pull/1711))
-- **Breaking:** `-mapView:symbolNameForAnnotation:` has been removed from the `MGLMapViewDelegate` protocol. Implement `-mapView:imageForAnnotation:` instead, which accepts images at runtime. ([#941](https://github.com/mapbox/mapbox-gl-native/pull/941))
-- **Breaking:** `MGLMapView.direction` is now expressed in terms of degrees clockwise from true north, as indicated in the documentation, rather than counterclockwise. ([#1789](https://github.com/mapbox/mapbox-gl-native/pull/1789))
-- A Satellite style showing Mapbox Satellite imagery is now bundled with Mapbox GL. ([#1845](https://github.com/mapbox/mapbox-gl-native/pull/1845))
-- Improved `UIView` tracking to the map. ([#1813](https://github.com/mapbox/mapbox-gl-native/pull/1813))
-- Delegate method `-[MGLMapViewDelegate mapView:didFailToLocateUserWithError:]` now works. ([#1608](https://github.com/mapbox/mapbox-gl-native/pull/1608))
-- It is now possible to fit the map’s viewport to a coordinate bounding box via `-[MGLMapView setVisibleCoordinateBounds:animated:]` or to a specific set of coordinates via `-[MGLMapView setVisibleCoordinates:count:edgePadding:animated:]`. ([#1783](https://github.com/mapbox/mapbox-gl-native/pull/1783), [#1795](https://github.com/mapbox/mapbox-gl-native/pull/1795))
-- The logo and ℹ️ no longer disappear or get distorted after embedding MGLMapView in a different view, and you can now access these subviews directly via properties on MGLMapView. ([#1779](https://github.com/mapbox/mapbox-gl-native/pull/1779), [#1815](https://github.com/mapbox/mapbox-gl-native/pull/1815))
-- Raster tiles now look sharper midway between two zoom levels. ([#1843](https://github.com/mapbox/mapbox-gl-native/pull/1843))
-- Resetting the map rotation to north no longer also resets the user location tracking mode. ([#1809](https://github.com/mapbox/mapbox-gl-native/pull/1809))
-- `-[MGLMapView convertPoint:toCoordinateFromView:]` now returns accurate coordinates on iPhone 6. ([#1827](https://github.com/mapbox/mapbox-gl-native/pull/1827))
-- Fixed an issue in which `-[MGLMapView direction]` would sometimes return 360 instead of 0. ([#1829](https://github.com/mapbox/mapbox-gl-native/pull/1829))
-- Build against iOS 8.4. ([#1868](https://github.com/mapbox/mapbox-gl-native/pull/1868))
+  Sorts drawing order by sort key both within-tile and cross-tile.
 
-## 0.4.0
+- [core] Add LocationIndicator layer ([#16340](https://github.com/mapbox/mapbox-gl-native/pull/16340))
 
-### Core
+  Adds a new layer type, `location-indicator`, that can be used to add a source-less indicator to the map, comprising raster images and a precision radius in meters.
 
-- Support for polyline and polygon shape annotations. ([#1655](https://github.com/mapbox/mapbox-gl-native/issues/1655))
-- Improved placement and density of labels. ([#1666](https://github.com/mapbox/mapbox-gl-native/issues/1666), [blog](https://www.mapbox.com/blog/better-label-placement-mapbox-mobile/))
-- Improved z-ordering appearance of point markers. ([#988](https://github.com/mapbox/mapbox-gl-native/issues/988))
-- Fixed an issue in which certain features, such as roundabouts, were not rendered completely. ([#1725](https://github.com/mapbox/mapbox-gl-native/issues/1725))
-- Many bug fixes and performance and stability improvements.
-- Improved tests.
+- Add generic setter for Layer's 'source' property ([#16406](https://github.com/mapbox/mapbox-gl-native/pull/16406))
 
-### iOS
+### 🐞 Bug fixes
 
-- **Breaking:** `MGLMapView` no longer manages Mapbox access tokens directly; an access token cannot be passed in when initializing the map view. Instead, set `MGLMapboxAccessToken` to your access token in your app’s `Info.plist` file, or call `+[MGLAccountManager setAccessToken:]` before initializing the map view. If you were setting the access token inside an Interface Builder inspectable, also remove it from the User Defined Runtime Attributes section of the Identity inspector. ([#1553](https://github.com/mapbox/mapbox-gl-native/issues/1553))
-- **Breaking:** `MGLAccountManager`'s `-setMapboxMetricsEnabledSettingShownInApp:` has been removed. If you implement a Mapbox Metrics switch inside your app, instead of inside a Settings bundle, set `MGLMapboxMetricsEnabledSettingShownInApp` to `YES` in the `Info.plist` file. ([#1553](https://github.com/mapbox/mapbox-gl-native/issues/1553))
-- **Breaking:** `MGLMapView`'s `-mapID` has been renamed to `-styleID`. ([#1561](https://github.com/mapbox/mapbox-gl-native/issues/1561))
-- Headers have been audited for nullability, improving type safety in both Objective-C and Swift 1.2 when compiling with Xcode 6.3 or above. ([#1578](https://github.com/mapbox/mapbox-gl-native/issues/1578))
-- Fixed an issue in which the map would sometimes spin 180° while rotating the map with two fingers. ([#1453](https://github.com/mapbox/mapbox-gl-native/issues/1453))
-- Added a shortcut to the Mapbox Metrics switch in `MGLMapView`'s action sheet that is attached to the ℹ️ button. ([#1611](https://github.com/mapbox/mapbox-gl-native/issues/1611))
-- `MGLMapView` now supports Interface Builder designables. When you add an `MGLMapView` to a storyboard, it displays instructions for getting set up directly on the storyboard canvas. ([#1573](https://github.com/mapbox/mapbox-gl-native/issues/1573))
-- The default title for the user location annotation is now “You Are Here”. You can customize the title by setting `mapView.userAnnotation.title`. ([#1559](https://github.com/mapbox/mapbox-gl-native/issues/1559))
-- Internal use of the Reachability library has been cleaned up so that your app can include its own copy of Reachability. ([#1718](https://github.com/mapbox/mapbox-gl-native/issues/1718))
-- Now distribute a binary stripped of debugging symbols by default with an optional, secondary symbols build. ([#1650](https://github.com/mapbox/mapbox-gl-native/issues/1650))
+- [core][tile mode] Reduce cut-off labels (part 2) ([#16369](https://github.com/mapbox/mapbox-gl-native/pull/16369))
 
-## 0.3.1
+  Now, the intersecting symbols are placed across all layers _symbol by symbol_ according to the following rules:
 
-- Temporarily removed `IBDesignable` support on iOS. 
+  1. First we look, which of the tile border(s) the symbol intersects and prioritize the the symbol placement accordingly (high priority -> low priority): `vertical & horizontal -> vertical -> horizontal`
+  2. For the symbols that intersect the same tile border(s), assuming the tile border split symbol into several sections, we look at the minimal section length. The symbol with a larger minimal section length is placed first.
+  3. For the symbols that intersect the same tile border(s), and have equal minimal section length, we look at the anchor coordinates.
+  4. Finally, if all the previous criteria are the same, we look at the symbol key hashes.
 
-## 0.3.0
+- [core][tile mode] Fix variable placement for labels with the `icon-text-fit` property set ([#16382](https://github.com/mapbox/mapbox-gl-native/pull/16382))
 
-- Initial iOS beta release. 
+  The `symbolIntersectsTileEdges()` util in `mbgl::TilePlacement` now considers icon shift for the variable symbols with enabled icon-text-fit setting, thus providing more accurate results.
 
-Known issues: 
+- [core] Correctly log a warning instead of crashing when a non-existent image is attempted to be removed. ([#16391](https://github.com/mapbox/mapbox-gl-native/pull/16391))
 
-- None. 
+- [core] Fix segfault resulting from an invalid geometry ([#16409](https://github.com/mapbox/mapbox-gl-native/pull/16409))
+
+- [macos] Restored support for macOS 10.11–10.14 ([#16412](https://github.com/mapbox/mapbox-gl-native/pull/16412))
+
+## maps-v1.5.1
+
+### 🐞 Bug fixes
+
+- [core] Fix assert in gfx resources cleanup ([#16349](https://github.com/mapbox/mapbox-gl-native/pull/16349))
+
+  Fix a resource leak assertion in `gl::Context::~Context()` that is evaluating false in scenarios where graphics context has been marked as lost.
+
+- Hillshade bucket fix for mapbox-gl-native-ios #240 ([#16362](https://github.com/mapbox/mapbox-gl-native/pull/16362))
+
+  When dem tiles are loaded, border in neighboring tiles is updated, too leading to bucket re-upload. if std::move moved indices / vertices previously, they are empty and we get crash. Re-upload requires that only DEM texture is re-uploaded, not the quad vertices and indices.
+
+## maps-v1.5.0
+
+### ✨ New features
+
+- [core] Add Renderer::clearData() ([#16323](https://github.com/mapbox/mapbox-gl-native/pull/16323))
+
+  The newly added `Renderer::clearData()` method allows to clear render data and thus save memory and make sure outdated tiles are not shown. It clears data more agressively than `Renderer::reduceMemoryUse()` does, as it clears not only the cache but all orchestration data, including the data used by the currently rendered frame.
+
+- [android] Add jni binding for styleable snapshotter ([#16286](https://github.com/mapbox/mapbox-gl-native/pull/16286))
+
+- [core] Ability to set generic layer properties using setProperty method ([#16324](https://github.com/mapbox/mapbox-gl-native/pull/16324))
+  This change enables the following new keys for the `mbgl::Layer::setProperty()` API:
+  - "filter" invokes `setFilter()`
+  - "minzoom" invokes `setMinZoom()`
+  - "maxzoom" invokes `setMaxZoom()`
+  - "source-layer" invokes `setSourceLayer()`
+
+  The newly-added API is used in the style-conversion code, which made this code much simpler.
+
+- [android] Expose getLayer, getSource and Observer interface for snapshotter ([#16338](https://github.com/mapbox/mapbox-gl-native/pull/16338))
+
+### 🐞 Bug fixes
+
+- [core] Use `TileCoordinates` instead of `LngLat` for `within` expression calculation ([#16319](https://github.com/mapbox/mapbox-gl-native/pull/16319))
+
+  Fix the issue that `within` expression evaluates point features inconsistently across zoom levels if the point lies near the boundary of a GeoJSON object ([#16301](https://github.com/mapbox/mapbox-gl-native/issues/16301))
+
+- [core][tile mode] Reduce cut-off labels ([#16336](https://github.com/mapbox/mapbox-gl-native/pull/16336))
+
+  Place tile intersecting labels first, across all the layers. Thus we reduce the amount of label cut-offs in Tile mode.
+
+  Before, labels were arranged within one symbol layer (one bucket),which was not enough for several symbol layers being placed at the same time.
+
+- [core] Fix issue that `within` expression returns incorrect results for geometries crossing the anti-meridian ([#16330](https://github.com/mapbox/mapbox-gl-native/pull/16330))
+
+## maps-v1.4.1
+
+### 🐞 Bug fixes
+
+- [android] Fix wrong method call in map_snapshotter ([#16308](https://github.com/mapbox/mapbox-gl-native/pull/16308))
+
+  In map_snapshotter, a wrong method call will cause Sanpshotter not works with a style url in Android. This change makes it call the right method to let Snapshotter works.
+
+## maps-v1.4.0
+
+### ✨ New features
+
+- [android] Add jni binding for line-sort-key and fill-sort-key ([#16256](https://github.com/mapbox/mapbox-gl-native/pull/16256))
+
+  With this change, android sdk will be able to get sort key for LineLayer and FillLayer.
+
+- Styleable MapSnapshotter ([#16268](https://github.com/mapbox/mapbox-gl-native/pull/16268))
+
+  New feature provides means of modifying style of a MapSnapshotter. The new API enables several use-cases, such as: adding route overlays, removing extra information (layers) from a base style, adding custom images that are missing from a style.
+
+- [core] Improve stability of symbol placement when the map is tilted ([#16287](https://github.com/mapbox/mapbox-gl-native/pull/16287))
+
+  These changes improve performance and bring more stability to the symbol placement for the tilted view, which is mainly used for navigation scenarios.
+
+### 🐞 Bug fixes
+
+- [core] Fix iterators in addRegularDash() ([#16249](https://github.com/mapbox/mapbox-gl-native/pull/16249))
+
+  Fixes possible crashes when using styles with line patterns.
+
+- [default] Fix possible crash at RunLoop::wake() ([#16255](https://github.com/mapbox/mapbox-gl-native/pull/16255))
+
+- [android] Update toGeoJSON in android_conversion.hpp ([#16243](https://github.com/mapbox/mapbox-gl-native/pull/16243))
+
+  Before this chage, `toGeoJSON` method in `android_conversion.hpp` could not convert an Object (Map in android) to GeoJSON object.
+
+  But `within` expression needs to accept an Object and then convert it to the GeoJSON object, now `toGeoJSON` method can convert both string and Object to GeoJSON.
+
+- [core] Fix `within` expression algorithm so that `false` value will be returned when point is on the boundary.  Allow using different GeoJSON formats as arguments of `within` expression.([#16232](https://github.com/mapbox/mapbox-gl-native/pull/16232))
+
+  A valid GeoJSON argument should contain one of the following types:  `"Feature"`, `"FeatureCollection"`,`"Polygon"` or `"MultiPolygon"`.
+
+- [core] [tile mode] placement algorithm must consider icons bounding boxes ([#16277](https://github.com/mapbox/mapbox-gl-native/pull/16277))
+
+  Tile mode placement algorithm now checks if bounding boxes for both label text and icon are intersecting the edges of the tiles.
+
+  Before, it checked only text bounding boxes and thus label icons might have got cut off.
+
+- [core] Calculate size of an ambient cache without offline region's resources ([#15622](https://github.com/mapbox/mapbox-gl-native/pull/15622))
+
+  Resources that belong to an offline region, should not contribute to the amount of space available in the ambient cache.
+
+ - [core][tile mode] Fix assertion at `line-center` placement handling ([#16293](https://github.com/mapbox/mapbox-gl-native/pull/16293))
+
+  The `Symbol Intersects Tile Edges` placement algorithm should not be applied to the symbols with `line-center` placement.
+
+ - Fixed using of the `in` expression as a layer filter ([#16272](https://github.com/mapbox/mapbox-gl-native/pull/16272))
+
+  The bug was caused by `mbgl::style::conversion::isExpression()` always returning `false` for the `in` expression.
+
+### 🧩  Architectural changes
+
+- Changes to `MapSnapshotter` threading model ([#16268](https://github.com/mapbox/mapbox-gl-native/pull/16268))
+
+  Snapshotter's threading model has been changed. Previously, `Map` and `HeadlessFrontend` that is responsible for rendering snapshot, were running on a dedicated thread. After [#16268](https://github.com/mapbox/mapbox-gl-native/pull/16268), `Map` object lives on client thread, so that the client can access `Style` object, while `HeadlessFrontend` lives on a dedicated `Snapshotter` thread.
+
+##### ⚠️  Breaking changes
+
+- Signature of a `MapSnapshotter`'s constructor has been changed
+- Signature for a `MapSnapshotter::snapshot` method has been changed
+- Size of an offline regions do not affect ambient cache size ([#15622](https://github.com/mapbox/mapbox-gl-native/pull/15622))
+
+##### 📌 Known issues
+
+- When feature is exactly on the geometry boundary, `within` expression returns inconsistent values for different zoom levels  ([#16301](https://github.com/mapbox/mapbox-gl-native/issues/16301))
+
+## maps-v1.3.0 (2020.02-relvanillashake)
+
+### 🐞 Bug fixes
+
+- [core] Fix offline region download freezing ([#16230](https://github.com/mapbox/mapbox-gl-native/pull/16230))
+
+  Downloaded resources are put in the buffer and inserted in the database in batches.
+
+  Before this change, the buffer was flushed only at the network response callback and thus it never got flushed if the last required resources were present locally and did not initiate network requests - it caused freezing.
+
+  Now the buffer is flushed every time the remaining resources container gets empty.
+
+### ✨ New features
+
+- [core] Add Layer::serialize() method ([#16231](https://github.com/mapbox/mapbox-gl-native/pull/16231))
+
+  New method allows serialization of a layer into a Value type, including all modifications done via runtime style API. New method is also an enabler for Style object serialization (sources, layers, etc).
+
+- [android] Add jni binding for min and max pitch ([#16236](https://github.com/mapbox/mapbox-gl-native/pull/16236))
+
+- [offline] Offline tool does not hang on 404 error ([#16240](https://github.com/mapbox/mapbox-gl-native/pull/16240))
+
+  The missing resource gets skipped and teh offline region download continues.
+
+##### ⚠️  Breaking changes
+
+- Changes to `mbgl::FileSourceManager::getFileSource()` ([#16238](https://github.com/mapbox/mapbox-gl-native/pull/16238))
+
+  It returns now `mbgl::PassRefPtr<FileSource>` (previously was `std::shared_ptr<FileSource>`) in order to enforce keeping the strong reference to the returned object.
+
+  Breaking code example:
+  `auto fs = FileSourceManager::getFileSource(); fs->..`
+
+  Posible fix:
+  `std::shared_ptr<FileSource> fs = `;
+
+- The `mbgl::OnlineFileSource` class cannot be used directly ([#16238](https://github.com/mapbox/mapbox-gl-native/pull/16238))
+
+  Clients must use the parent `mbgl::FileSource` interface instead.
+
+  Breaking code example:
+  `std::shared_ptr<OnlineFileSource> onlineSource = std::static_pointer_cast<OnlineFileSource>(FileSourceManager::get()->getFileSource(..));`
+
+  Possible fix:
+  `std::shared_ptr<FileSource> onlineSource = FileSourceManager::get()->getFileSource(..);`
+
+## maps-v1.2.1 (2020.02-release-vanillashake)
+
+### 🐞 Bug fixes
+
+- [core] Revert shader changes from [#16189](https://github.com/mapbox/mapbox-gl-native/pull/16189), which will cause incorrect label positioning ([#16235](https://github.com/mapbox/mapbox-gl-native/pull/16235))
+
+  This is a back porting from GL JS [#9333](https://github.com/mapbox/mapbox-gl-js/pull/9333)
+
+- [ios] Restored support for iOS 9–11 by default ([#16241](https://github.com/mapbox/mapbox-gl-native/pull/16242))
+
+## maps-v1.2.0 (2020.02-release-vanillashake)
+
+### ✨ New features
+
+- [core] Global settings API ([#16174](https://github.com/mapbox/mapbox-gl-native/pull/16174))
+
+  Global settings API provides means of managing non-persistent in-process settings. Initial implementation contains support for experimental option for setting thread priorities.
+
+- Expose READ_ONLY_MODE_KEY property for DatabaseFileSource ([#16183](https://github.com/mapbox/mapbox-gl-native/pull/16183))
+
+  The `READ_ONLY_MODE_KEY` property is exposed for `DatabaseFileSource`.
+
+  This property allows to re-open the offline database in read-only mode and thus improves the performance for the set-ups that do not require the offline database modifications.
+
+- [core] Add runtime API for setting tile prefetch delta for a Source ([#16179](https://github.com/mapbox/mapbox-gl-native/pull/16179))
+
+  The new `Source::setPrefetchZoomDelta(optional<uint8_t>)` method allows overriding default tile prefetch setting that is defined by the Map instance.
+
+- [core] Add support for `within expression`. Implement the use of `within expression` with paint propery and filter expression. ([#16157](https://github.com/mapbox/mapbox-gl-native/pull/16157))
+
+  The `within expression` enables checking whether a feature is inside a pre-defined geometry set/boundary or not. This `within expression` returns a boolean value, `true` indicates that the feature being evaluated is inside the geometry set. The returned value can be then consumed as input by another expression or used directly by a paint/layer property.
+
+  Support for using `within expression` with layout property will be implemented separately.
+
+- [core] Add support for using `within expression` with layout property. ([#16194](https://github.com/mapbox/mapbox-gl-native/pull/16194))
+
+- [core] Add support for `in expression`. ([#16162](https://github.com/mapbox/mapbox-gl-native/pull/16162))
+
+  The `in expression` enables checking whether a Number/String/Boolean type item is in a String/Array and returns a boolean value.
+
+- [core] Add support for using `within expression` with features having `'LineString'` geometry type. ([#16220](https://github.com/mapbox/mapbox-gl-native/pull/16220))
+
+  `within expression` now supports features with geometry types: `'Point'` or `'LineString'`.
+
+### 🐞 Bug fixes
+
+- [core] Don't provide multiple responses with the same data for 304 replies ([#16200](https://github.com/mapbox/mapbox-gl-native/pull/16200))
+
+  In cases when cached resource is useable, yet don't have an expiration timestamp, we provided data to the requester from the cache and the same data was returned once 304 response was received from the network.
+
+- [core] Fix potential visual artifact for line-dasharray ([#16202](https://github.com/mapbox/mapbox-gl-native/pull/16202))
+
+- Store gfx::DrawScope objects with associated render objects. ([#15395](https://github.com/mapbox/mapbox-gl-native/pull/15395))
+
+  We used some shared SegmentVectors, e.g. for drawing raster or background tiles. In longer running maps, this lead to resource accumulation. By storing the SegmentVectors and the contained gfx::DrawScope objects, we ensure that resources get released when the associated render objects vanish.
+
+- [core] Fix sprite sheet merging in Style::Impl::onSpriteLoaded ([#16211](https://github.com/mapbox/mapbox-gl-native/pull/16211))
+
+  If we get a new sprite sheet from the server, we need to merge current sprite sheet with a new one, while overwriting duplicates and keeping old unique images in a style.
+
+### 🏁 Performance improvements
+
+ - [core] Loading images to style optimization ([#16187](https://github.com/mapbox/mapbox-gl-native/pull/16187))
+
+   This change enables attaching images to the style with batches and avoids massive re-allocations. Thus, it improves UI performance especially at start-up time.
+
+### 🧩  Architectural changes
+
+##### ⚠️  Breaking changes
+
+ - [core] Loading images to style optimization ([#16187](https://github.com/mapbox/mapbox-gl-native/pull/16187))
+
+   The `style::Style::getImage()` semantics changed - it now returns `optional<style::Image>`.
+
+## maps-v1.0.1 (2020.01-release-unicorn)
+
+### 🐞 Bug fixes
+
+- [core] Use std::list instead of std::map for factory instance ([#16161](https://github.com/mapbox/mapbox-gl-native/pull/16161))
+
+  Factory 'get' method can be invoked recursively and stable iterators are required to guarantee safety.
+
+- [tile mode] Improvements in symbol placement on tile borders ([#16159](https://github.com/mapbox/mapbox-gl-native/pull/16159))
+
+  In tile mode, the placement order of two symbols crossing a tile border is defined by their anchor Y values.
+
+  Symbols crossing the borders between two neighboring tiles are placed with priority.
+
+  It improves symbol placement stability in the tile map mode.
+
+## maps-v1.0.0 (2020.01-release-unicorn)
+
+### ✨ New features
+
+- [core] Implement stretchable icons ([#16030](https://github.com/mapbox/mapbox-gl-native/pull/16030))
+
+  [Stretchable icons](https://github.com/mapbox/mapbox-gl-js/issues/8917) allow defining certain areas of an icon that may be stretched, leaving the remaining areas of an icon at a fixed size.
+
+- [core] Port line-sort-key and fill-sort-key ([#15839](https://github.com/mapbox/mapbox-gl-native/pull/15839))
+
+  The new feature allows to sort line and fill layer features. Similar to `symbol-sort-key`.
+
+- [core] Add image sections to format expression ([#15937](https://github.com/mapbox/mapbox-gl-native/pull/15937))
+
+  The new feature allows to embed images into labels.
+
+- [core] Introduce OfflineDatabase::runPackDatabaseAutomatically() API ([#15967](https://github.com/mapbox/mapbox-gl-native/pull/15967))
+
+  The new API allows to enable / disable automatic packing of a database.
+
+- [core] Decouple offline storage vacuum and the deleteRegion API ([#15899](https://github.com/mapbox/mapbox-gl-native/pull/15899))
+  - introduce `OfflineDatabase::pack()` standing for incremental vacuum
+  - make packing optional at offline region deletion
+
+- [core] Implement image expression (#15877)
+
+  The [image expression](https://docs.mapbox.com/mapbox-gl-js/style-spec/#expressions-types-image) allows determining an image's availability.
+
+- [core] Add batch conversion of latLngs to/from screenCoords ([#15891](https://github.com/mapbox/mapbox-gl-native/pull/15891))
+
+  This patch introduces batch conversion between LatLng and ScreenCoordinate in Gl-Native core, so for multiple conversions with single point/latLng previously now it can be done with invoking one function call by passing vector of points/latLngs.
+
+### 🐞 Bug fixes
+- [tile mode] Fix variable symbols placement ([#16141](https://github.com/mapbox/mapbox-gl-native/pull/16141)
+
+  This change allows the variable symbols to cross the tile border only if their anchor is the first anchor from the `text-variable-anchor` list.
+
+- [core] Use weak scheduler inside mailbox ([#16136](https://github.com/mapbox/mapbox-gl-native/pull/16136))
+
+  If there are pending requests that are completed after main scheduler is destructed, worker threads may try to push messages to destructed scheduler's queue.
+
+- [core] Fix a crash in GeoJSON source parsing, caused by `GeoJSONVTData` ownership error ([#16106](https://github.com/mapbox/mapbox-gl-native/pull/16106))
+
+- [core] Stable position of labels at tile borders in tile mode ([#16040](https://github.com/mapbox/mapbox-gl-native/pull/16040))
+
+  These changes allow to avoid cutting-off labels on tile borders if the variable text placement is enabled.
+
+- [core] Fix really overscaled lines ([#16045](https://github.com/mapbox/mapbox-gl-native/pull/16045))
+
+  We resample lines after sharp corners in some situations. When tiles were really overscaled, sometimes we didn't have enough precision to represent the resampled vertex because it was too close. Disabling this after a certain point prevents this ([#16018](https://github.com/mapbox/mapbox-gl-native/issues/16018)).
+
+- [core] Don't use signed int type for anchor segment ([#16008](https://github.com/mapbox/mapbox-gl-native/pull/16008))
+
+  Erroneous signed to unsigned implicit conversion was used when PlacedSymbol(s) were created in SymbolLayout and signed values were used as indexes in a few other places.
+
+- [core] Increase padding in CollisionIndex for MapMode::Tile ([#15880](https://github.com/mapbox/mapbox-gl-native/pull/15880))
+
+  This increases the padding to 1024 for MapMode::Tile which should be enough to completely include all the data two zoom levels past the data source's max zoom level. Beyond that, 1024 should be enough of a padding to make clipped labels unlikely.
+
+- [core] Blacklist VAO extension for Adreno (TM) 4xx GPUs ([#15978](https://github.com/mapbox/mapbox-gl-native/pull/15978))
+
+  Blacklist in order to avoid crashes in a driver (Android 5.1.1)
+
+- [core] Retain thread pool in GeoJSONSource ([#15992](https://github.com/mapbox/mapbox-gl-native/pull/15992))
+
+  Otherwise, the construction of the `Immutable<Source::Impl>` in background thread might never yeld.
+
+- [core] Fix supercluster lambdas capturing ([#15989](https://github.com/mapbox/mapbox-gl-native/pull/15989))
+
+  Fix wrapping of the parameters in supercluster map/reduce lambdas (Previously, local variables were wrapped by reference).
+
+- [core] fix rendering of dashed lines with round caps ([#15947](https://github.com/mapbox/mapbox-gl-native/pull/15947))
+
+  In [#15862](https://github.com/mapbox/mapbox-gl-native/pull/15862), we introduced individual textures for line dash patterns to eliminate atlas overflows. Unfortunately, this broke dashed lines that had round caps (dashed lines with straight caps still rendered correctly). Line pattern textures for round caps were now using 256×15 pixel textures.
+
+- [core] Fix incorrect resizing of TileCache ([#15943](https://github.com/mapbox/mapbox-gl-native/pull/15943))
+
+- [core] Avoid GeoJSON source flickering on style transitions ([#15907](https://github.com/mapbox/mapbox-gl-native/pull/15907))
+
+  Before this change, all GeoJSON source cleared tile pyramid at the style transition and it caused flickering.
+
+- [core] Use individual textures for line dash patterns ([#15862](https://github.com/mapbox/mapbox-gl-native/pull/15862))
+
+  This moves the LineAtlas from a shared texture that contained SDF dash patterns to use individual textures.
+
+- [core] Fix collisions with icon-text-fit and variable placement ([#15828](https://github.com/mapbox/mapbox-gl-native/pull/15828))
+
+  When deciding the placement position it was only checking whether there were text collisions. Now, if icon-text-fit is used it now checks whether the icon fits before accepting a placement position.
+
+- [core] Fix icon-text-fit ([#15634](https://github.com/mapbox/mapbox-gl-native/pull/15634))
+
+  This fixes rendering by account for the 1px texture padding around icons that were stretched with icon-text-fit.
+
+### 🏁 Performance improvements
+
+- [core] Cross tile index performance ([#16127](https://github.com/mapbox/mapbox-gl-native/pull/16127))
+
+  For overscaled tiles, index only the symbols inside the viewport.
+
+  Find matches only among the buckets that have the same leader Id.
+
+- [core] Calculate GeoJSON tile geometries in a background thread ([#15953](https://github.com/mapbox/mapbox-gl-native/pull/15953))
+
+  Call `mapbox::geojsonvt::GeoJSONVT::getTile()` in a background thread, so that the rendering thread is not blocked.
+
+- [core] Make requests for expired resources lower priority than requests for new resources ([#15950](https://github.com/mapbox/mapbox-gl-native/pull/15950))
+
+- [core] Add Scheduler::scheduleAndReplyValue() API ([#15885](https://github.com/mapbox/mapbox-gl-native/pull/15885))
+
+  This change converts GeoJSON features to tiles for the loaded source description in a background thread and thus unblock the UI thread.
+
+- [core] Enable incremental vacuum for Offline DB ([#15837](https://github.com/mapbox/mapbox-gl-native/pull/15837))
+
+  Thus we avoid re-creating the whole database and keeping the backup file as it happens on calling VACUUM.
+
+- [core] Fix image requests for already obtained images ([#15825](https://github.com/mapbox/mapbox-gl-native/pull/15825))
+
+  Before this fix, repeated request for an already obtained image was erroneously treated as pending, and it prevented from the tiles load completion.
+
+### 🧩  Architectural changes
+
+- [core] Merge style::Layer::set{Layout,Paint}Property ([#15997](https://github.com/mapbox/mapbox-gl-native/pull/15997))
+
+- [core] Use expected.hpp from mapbox-base ([#15898](https://github.com/mapbox/mapbox-gl-native/pull/15898))
+
+##### ⚠️  Breaking changes
+
+- [core] Cross tile index performance (#16127)
+
+  Introduces public [mblg::Renderer::render](https://github.com/mapbox/mapbox-gl-native/pull/16127/files#diff-5a977e0401792825d7fcf522d48df11fR34) API break.
+
+- [core] Refactor DefaultFileSource codebase ([#15768](https://github.com/mapbox/mapbox-gl-native/pull/15768))
+  - Adds `FileSourceManager` interface that provides access to `FileSource` instances and means of registering / unregistering `FileSource` factories
+  - Splits `DefaultFileSource` into smaller parts
+  - Adds `DatabaseFileSource` interface and it's default implementation
+  - Removes inter-dependencies between concrete `FileSource` classes
+  - All sources operate on dedicated thread, except `MainResourceLoader` that acts as a dispatcher and works on thread that requested it.
+  - Removes `ResourceOptions::withCacheOnlyRequestsSupport` method
+
+- [core] Remove Map::cycleDebugOptions ([#16005](https://github.com/mapbox/mapbox-gl-native/pull/16005))
+
+  This function was mostly used by the Android API, which is no longer necessary.

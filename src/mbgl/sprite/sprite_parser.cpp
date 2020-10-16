@@ -1,138 +1,201 @@
 #include <mbgl/sprite/sprite_parser.hpp>
-#include <mbgl/sprite/sprite_image.hpp>
+#include <mbgl/style/image.hpp>
+#include <mbgl/style/image_impl.hpp>
 
-#include <mbgl/platform/log.hpp>
+#include <mbgl/util/exception.hpp>
+#include <mbgl/util/logging.hpp>
 
 #include <mbgl/util/image.hpp>
 #include <mbgl/util/rapidjson.hpp>
+#include <mbgl/util/string.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
-#include <sstream>
 
 namespace mbgl {
 
-SpriteImagePtr createSpriteImage(const PremultipliedImage& image,
-                                 const uint16_t srcX,
-                                 const uint16_t srcY,
-                                 const uint16_t width,
-                                 const uint16_t height,
-                                 const double ratio,
-                                 const bool sdf) {
+std::unique_ptr<style::Image> createStyleImage(const std::string& id,
+                                               const PremultipliedImage& image,
+                                               const int32_t srcX,
+                                               const int32_t srcY,
+                                               const int32_t width,
+                                               const int32_t height,
+                                               const double ratio,
+                                               const bool sdf,
+                                               style::ImageStretches&& stretchX,
+                                               style::ImageStretches&& stretchY,
+                                               const optional<style::ImageContent>& content) {
     // Disallow invalid parameter configurations.
-    if (width == 0 || height == 0 || ratio <= 0 || ratio > 10 || width > 1024 ||
-        height > 1024) {
-        Log::Warning(Event::Sprite, "Can't create sprite with invalid metrics");
+    if (width <= 0 || height <= 0 || width > 1024 || height > 1024 || ratio <= 0 || ratio > 10 || srcX < 0 ||
+        srcY < 0 || srcX >= static_cast<int32_t>(image.size.width) || srcY >= static_cast<int32_t>(image.size.height) ||
+        srcX + width > static_cast<int32_t>(image.size.width) ||
+        srcY + height > static_cast<int32_t>(image.size.height)) {
+        Log::Error(Event::Sprite,
+                   "Can't create image with invalid metrics: %dx%d@%d,%d in %ux%u@%sx sprite",
+                   width,
+                   height,
+                   srcX,
+                   srcY,
+                   image.size.width,
+                   image.size.height,
+                   util::toString(ratio).c_str());
         return nullptr;
     }
 
-    PremultipliedImage dstImage(width, height);
-
-    auto srcData = reinterpret_cast<const uint32_t*>(image.data.get());
-    auto dstData = reinterpret_cast<uint32_t*>(dstImage.data.get());
-
-    const int32_t maxX = std::min(uint32_t(image.width), uint32_t(width + srcX)) - srcX;
-    assert(maxX <= int32_t(image.width));
-    const int32_t maxY = std::min(uint32_t(image.height), uint32_t(height + srcY)) - srcY;
-    assert(maxY <= int32_t(image.height));
+    const Size size(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+    PremultipliedImage dstImage(size);
 
     // Copy from the source image into our individual sprite image
-    for (uint16_t y = 0; y < maxY; ++y) {
-        const auto dstRow = y * width;
-        const auto srcRow = (y + srcY) * image.width + srcX;
-        for (uint16_t x = 0; x < maxX; ++x) {
-            dstData[dstRow + x] = srcData[srcRow + x];
-        }
-    }
+    PremultipliedImage::copy(image, dstImage, {static_cast<uint32_t>(srcX), static_cast<uint32_t>(srcY)}, {0, 0}, size);
 
-    return std::make_unique<const SpriteImage>(std::move(dstImage), ratio, sdf);
+    try {
+        return std::make_unique<style::Image>(
+            id, std::move(dstImage), ratio, sdf, std::move(stretchX), std::move(stretchY), content);
+    } catch (const util::StyleImageException& ex) {
+        Log::Error(Event::Sprite, "Can't create image with invalid metadata: %s", ex.what());
+        return nullptr;
+    }
 }
 
 namespace {
 
-inline uint16_t getUInt16(const JSValue& value, const char* name, const uint16_t def = 0) {
-    if (value.HasMember(name)) {
-        auto& v = value[name];
+uint16_t getUInt16(const JSValue& value, const char* property, const char* name, const uint16_t def = 0) {
+    if (value.HasMember(property)) {
+        auto& v = value[property];
         if (v.IsUint() && v.GetUint() <= std::numeric_limits<uint16_t>::max()) {
             return v.GetUint();
         } else {
-            Log::Warning(Event::Sprite, "Value of '%s' must be an integer between 0 and 65535",
-                         name);
+            Log::Warning(Event::Sprite,
+                         "Invalid sprite image '%s': value of '%s' must be an integer between 0 and 65535",
+                         name,
+                         property);
         }
     }
 
     return def;
 }
 
-inline double getDouble(const JSValue& value, const char* name, const double def = 0) {
-    if (value.HasMember(name)) {
-        auto& v = value[name];
+double getDouble(const JSValue& value, const char* property, const char* name, const double def = 0) {
+    if (value.HasMember(property)) {
+        auto& v = value[property];
         if (v.IsNumber()) {
             return v.GetDouble();
         } else {
-            Log::Warning(Event::Sprite, "Value of '%s' must be a number", name);
+            Log::Warning(Event::Sprite, "Invalid sprite image '%s': value of '%s' must be a number", name, property);
         }
     }
 
     return def;
 }
 
-inline bool getBoolean(const JSValue& value, const char* name, const bool def = false) {
-    if (value.HasMember(name)) {
-        auto& v = value[name];
+bool getBoolean(const JSValue& value, const char* property, const char* name, const bool def = false) {
+    if (value.HasMember(property)) {
+        auto& v = value[property];
         if (v.IsBool()) {
             return v.GetBool();
         } else {
-            Log::Warning(Event::Sprite, "Value of '%s' must be a boolean", name);
+            Log::Warning(Event::Sprite, "Invalid sprite image '%s': value of '%s' must be a boolean", name, property);
         }
     }
 
     return def;
+}
+
+style::ImageStretches getStretches(const JSValue& value, const char* property, const char* name) {
+    style::ImageStretches stretches;
+
+    if (value.HasMember(property)) {
+        auto& v = value[property];
+        if (v.IsArray()) {
+            for (rapidjson::SizeType i = 0; i < v.Size(); ++i) {
+                const JSValue& stretch = v[i];
+                if (stretch.IsArray() && stretch.Size() == 2 && stretch[rapidjson::SizeType(0)].IsNumber() &&
+                    stretch[rapidjson::SizeType(1)].IsNumber()) {
+                    stretches.emplace_back(style::ImageStretch{stretch[rapidjson::SizeType(0)].GetFloat(),
+                                                               stretch[rapidjson::SizeType(1)].GetFloat()});
+                } else {
+                    Log::Warning(Event::Sprite,
+                                 "Invalid sprite image '%s': members of '%s' must be an array of two numbers",
+                                 name,
+                                 property);
+                }
+            }
+        } else {
+            Log::Warning(Event::Sprite, "Invalid sprite image '%s': value of '%s' must be an array", name, property);
+        }
+    }
+
+    return stretches;
+}
+
+optional<style::ImageContent> getContent(const JSValue& value, const char* property, const char* name) {
+    if (value.HasMember(property)) {
+        auto& content = value[property];
+        if (content.IsArray() && content.Size() == 4 && content[rapidjson::SizeType(0)].IsNumber() &&
+            content[rapidjson::SizeType(1)].IsNumber() && content[rapidjson::SizeType(2)].IsNumber() &&
+            content[rapidjson::SizeType(3)].IsNumber()) {
+            return style::ImageContent{content[rapidjson::SizeType(0)].GetFloat(),
+                                       content[rapidjson::SizeType(1)].GetFloat(),
+                                       content[rapidjson::SizeType(2)].GetFloat(),
+                                       content[rapidjson::SizeType(3)].GetFloat()};
+        } else {
+            Log::Warning(Event::Sprite,
+                         "Invalid sprite image '%s': value of '%s' must be an array of four numbers",
+                         name,
+                         property);
+        }
+    }
+
+    return nullopt;
 }
 
 } // namespace
 
-SpriteParseResult parseSprite(const std::string& image, const std::string& json) {
-    Sprites sprites;
-    PremultipliedImage raster;
-
-    try {
-        raster = decodeImage(image);
-    } catch (...) {
-        return std::current_exception();
-    }
+std::vector<Immutable<style::Image::Impl>> parseSprite(const std::string& encodedImage, const std::string& json) {
+    const PremultipliedImage raster = decodeImage(encodedImage);
 
     JSDocument doc;
     doc.Parse<0>(json.c_str());
-
     if (doc.HasParseError()) {
-        std::stringstream message;
-        message << "Failed to parse JSON: " << rapidjson::GetParseError_En(doc.GetParseError()) << " at offset " << doc.GetErrorOffset();
-        return std::make_exception_ptr(std::runtime_error(message.str()));
-    } else if (!doc.IsObject()) {
-        return std::make_exception_ptr(std::runtime_error("Sprite JSON root must be an object"));
-    } else {
-        for (JSValue::ConstMemberIterator itr = doc.MemberBegin(); itr != doc.MemberEnd(); ++itr) {
-            const std::string name = { itr->name.GetString(), itr->name.GetStringLength() };
-            const JSValue& value = itr->value;
+        throw std::runtime_error("Failed to parse JSON: " + formatJSONParseError(doc));
+    }
 
-            if (value.IsObject()) {
-                const uint16_t x = getUInt16(value, "x", 0);
-                const uint16_t y = getUInt16(value, "y", 0);
-                const uint16_t width = getUInt16(value, "width", 0);
-                const uint16_t height = getUInt16(value, "height", 0);
-                const double pixelRatio = getDouble(value, "pixelRatio", 1);
-                const bool sdf = getBoolean(value, "sdf", false);
+    if (!doc.IsObject()) {
+        throw std::runtime_error("Sprite JSON root must be an object");
+    }
 
-                auto sprite = createSpriteImage(raster, x, y, width, height, pixelRatio, sdf);
-                if (sprite) {
-                    sprites.emplace(name, sprite);
-                }
+    const auto& properties = doc.GetObject();
+    std::vector<Immutable<style::Image::Impl>> images;
+    images.reserve(properties.MemberCount());
+    for (const auto& property : properties) {
+        const std::string name = {property.name.GetString(), property.name.GetStringLength()};
+        const JSValue& value = property.value;
+
+        if (value.IsObject()) {
+            const uint16_t x = getUInt16(value, "x", name.c_str(), 0);
+            const uint16_t y = getUInt16(value, "y", name.c_str(), 0);
+            const uint16_t width = getUInt16(value, "width", name.c_str(), 0);
+            const uint16_t height = getUInt16(value, "height", name.c_str(), 0);
+            const double pixelRatio = getDouble(value, "pixelRatio", name.c_str(), 1);
+            const bool sdf = getBoolean(value, "sdf", name.c_str(), false);
+            style::ImageStretches stretchX = getStretches(value, "stretchX", name.c_str());
+            style::ImageStretches stretchY = getStretches(value, "stretchY", name.c_str());
+            optional<style::ImageContent> content = getContent(value, "content", name.c_str());
+
+            auto image = createStyleImage(
+                name, raster, x, y, width, height, pixelRatio, sdf, std::move(stretchX), std::move(stretchY), content);
+            if (image) {
+                images.push_back(std::move(image->baseImpl));
             }
         }
     }
 
-    return sprites;
+    assert([&images] {
+        std::sort(images.begin(), images.end());
+        return std::unique(images.begin(), images.end()) == images.end();
+    }());
+    return images;
 }
 
 } // namespace mbgl

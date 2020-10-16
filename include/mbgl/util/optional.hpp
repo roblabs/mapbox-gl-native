@@ -1,13 +1,13 @@
-#ifndef MBGL_UTIL_OPTIONAL
-#define MBGL_UTIL_OPTIONAL
+#pragma once
 
-#include <experimental/optional>
+#include <optional.hpp>
 
 namespace mbgl {
 
 template <typename T>
 using optional = std::experimental::optional<T>;
 
-} // namespace mbgl
+using nullopt_t = std::experimental::nullopt_t;
+constexpr nullopt_t nullopt = std::experimental::nullopt;
 
-#endif
+} // namespace mbgl

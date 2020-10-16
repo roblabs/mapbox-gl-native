@@ -23,41 +23,51 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef MBGL_UTIL_UNITBEZIER
-#define MBGL_UTIL_UNITBEZIER
+#pragma once
 
 #include <cmath>
+#include <tuple>
 
 namespace mbgl {
 namespace util {
 
 struct UnitBezier {
-    UnitBezier(double p1x, double p1y, double p2x, double p2y) {
-        // Calculate the polynomial coefficients, implicit first and last control points are (0,0) and (1,1).
-        cx = 3.0 * p1x;
-        bx = 3.0 * (p2x - p1x) - cx;
-        ax = 1.0 - cx - bx;
-
-        cy = 3.0 * p1y;
-        by = 3.0 * (p2y - p1y) - cy;
-        ay = 1.0 - cy - by;
+    // Calculate the polynomial coefficients, implicit first and last control points are (0,0) and (1,1).
+    constexpr UnitBezier(double p1x, double p1y, double p2x, double p2y)
+        : cx(3.0 * p1x)
+        , bx(3.0 * (p2x - p1x) - (3.0 * p1x))
+        , ax(1.0 - (3.0 * p1x) - (3.0 * (p2x - p1x) - (3.0 * p1x)))
+        , cy(3.0 * p1y)
+        , by(3.0 * (p2y - p1y) - (3.0 * p1y))
+        , ay(1.0 - (3.0 * p1y) - (3.0 * (p2y - p1y) - (3.0 * p1y))) {
     }
 
-    double sampleCurveX(double t) {
+    std::pair<double, double> getP1() const {
+        return { cx / 3.0, cy / 3.0 };
+    }
+
+    std::pair<double, double> getP2() const {
+        return {
+            (bx + (3.0 * cx / 3.0) + cx) / 3.0,
+            (by + (3.0 * cy / 3.0) + cy) / 3.0,
+        };
+    }
+
+    double sampleCurveX(double t) const {
         // `ax t^3 + bx t^2 + cx t' expanded using Horner's rule.
         return ((ax * t + bx) * t + cx) * t;
     }
 
-    double sampleCurveY(double t) {
+    double sampleCurveY(double t) const {
         return ((ay * t + by) * t + cy) * t;
     }
 
-    double sampleCurveDerivativeX(double t) {
+    double sampleCurveDerivativeX(double t) const {
         return (3.0 * ax * t + 2.0 * bx) * t + cx;
     }
 
     // Given an x value, find a parametric value it came from.
-    double solveCurveX(double x, double epsilon) {
+    double solveCurveX(double x, double epsilon) const {
         double t0;
         double t1;
         double t2;
@@ -101,21 +111,24 @@ struct UnitBezier {
         return t2;
     }
 
-    double solve(double x, double epsilon) {
+    double solve(double x, double epsilon) const {
         return sampleCurveY(solveCurveX(x, epsilon));
+    }
+    
+    bool operator==(const UnitBezier& rhs) const {
+        return std::tie(cx, bx, ax, cy, by, ay) ==
+            std::tie(rhs.cx, rhs.bx, rhs.ax, rhs.cy, rhs.by, rhs.ay);
     }
 
 private:
-    double ax;
-    double bx;
-    double cx;
+    const double cx;
+    const double bx;
+    const double ax;
 
-    double ay;
-    double by;
-    double cy;
+    const double cy;
+    const double by;
+    const double ay;
 };
 
 } // namespace util
 } // namespace mbgl
-
-#endif

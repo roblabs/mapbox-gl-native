@@ -1,51 +1,76 @@
-#ifndef MBGL_RENDERER_BUCKET
-#define MBGL_RENDERER_BUCKET
+#pragma once
 
-#include <mbgl/platform/gl.hpp>
-#include <mbgl/renderer/render_pass.hpp>
-#include <mbgl/util/noncopyable.hpp>
-#include <mbgl/util/mat4.hpp>
-
+#include <mbgl/tile/geometry_tile_data.hpp>
+#include <mbgl/style/image_impl.hpp>
+#include <mbgl/renderer/image_atlas.hpp>
+#include <mbgl/style/layer_impl.hpp>
 #include <atomic>
-
-#define BUFFER_OFFSET_0  ((GLbyte*)nullptr)
-#define BUFFER_OFFSET(i) ((BUFFER_OFFSET_0) + (i))
 
 namespace mbgl {
 
-class Painter;
-class StyleLayer;
-class TileID;
-class CollisionTile;
+namespace gfx {
+class UploadPass;
+} // namespace gfx
 
-class Bucket : private util::noncopyable {
+class RenderLayer;
+class CrossTileSymbolLayerIndex;
+class OverscaledTileID;
+class PatternDependency;
+using PatternLayerMap = std::map<std::string, PatternDependency>;
+class Placement;
+class TransformState;
+class BucketPlacementData;
+class RenderTile;
+
+class Bucket {
 public:
-    Bucket() : uploaded(false) {}
-
-    // As long as this bucket has a Prepare render pass, this function is getting called. Typically,
-    // this only happens once when the bucket is being rendered for the first time.
-    virtual void upload() = 0;
-
-    // Every time this bucket is getting rendered, this function is called. This happens either
-    // once or twice (for Opaque and Transparent render passes).
-    virtual void render(Painter&, const StyleLayer&, const TileID&, const mat4&) = 0;
+    Bucket(const Bucket&) = delete;
+    Bucket& operator=(const Bucket&) = delete;
 
     virtual ~Bucket() = default;
 
+    // Feature geometries are also used to populate the feature index.
+    // Obtaining these is a costly operation, so we do it only once, and
+    // pass-by-const-ref the geometries as a second parameter.
+    virtual void addFeature(const GeometryTileFeature&,
+                            const GeometryCollection&,
+                            const ImagePositions&,
+                            const PatternLayerMap&,
+                            std::size_t,
+                            const CanonicalTileID&){};
+
+    virtual void update(const FeatureStates&, const GeometryTileLayer&, const std::string&, const ImagePositions&) {}
+
+    // As long as this bucket has a Prepare render pass, this function is getting called. Typically,
+    // this only happens once when the bucket is being rendered for the first time.
+    virtual void upload(gfx::UploadPass&) = 0;
+
     virtual bool hasData() const = 0;
 
-    inline bool needsUpload() const {
-        return !uploaded;
-    }
+    virtual float getQueryRadius(const RenderLayer&) const {
+        return 0;
+    };
 
-    virtual void placeFeatures(CollisionTile&) {}
-    virtual void swapRenderData() {}
+    bool needsUpload() const {
+        return hasData() && !uploaded;
+    }
+   
+    // The following methods are implemented by buckets that require cross-tile indexing and placement.
+
+    // Returns a pair, the first element of which is a bucket cross-tile id
+    // on success call; `0` otherwise. The second element is `true` if
+    // the bucket was originally registered; `false` otherwise.
+    virtual std::pair<uint32_t, bool> registerAtCrossTileIndex(CrossTileSymbolLayerIndex&, const RenderTile&) {
+        return std::make_pair(0u, false);
+    }
+    // Places this bucket to the given placement.
+    virtual void place(Placement&, const BucketPlacementData&, std::set<uint32_t>&) {}
+    virtual void updateVertices(
+        const Placement&, bool /*updateOpacities*/, const TransformState&, const RenderTile&, std::set<uint32_t>&) {}
 
 protected:
-    std::atomic<bool> uploaded;
-
+    Bucket() = default;
+    std::atomic<bool> uploaded { false };
 };
 
 } // namespace mbgl
-
-#endif

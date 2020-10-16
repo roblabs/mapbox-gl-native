@@ -1,4 +1,7 @@
 #include <mbgl/text/check_max_angle.hpp>
+#include <mbgl/geometry/anchor.hpp>
+#include <mbgl/util/math.hpp>
+
 #include <queue>
 
 namespace mbgl{
@@ -10,24 +13,25 @@ struct Corner {
     float angleDelta;
 };
 
-bool checkMaxAngle(const std::vector<Coordinate> &line, Anchor &anchor, const float labelLength,
-        const float windowSize, const float maxAngle) {
-
+bool checkMaxAngle(const GeometryCoordinates& line,
+                   const Anchor& anchor,
+                   const float labelLength,
+                   const float windowSize,
+                   const float maxAngle) {
     // horizontal labels always pass
-    if (anchor.segment < 0) return true;
+    if (!anchor.segment) return true;
 
-    Coordinate anchorPoint = Coordinate{ (int16_t)anchor.x, (int16_t)anchor.y };
-    Coordinate &p = anchorPoint;
-    int index = anchor.segment + 1;
+    GeometryCoordinate anchorPoint = convertPoint<int16_t>(anchor.point);
+    GeometryCoordinate &p = anchorPoint;
+    std::size_t index = *anchor.segment + 1;
     float anchorDistance = 0;
 
     // move backwards along the line to the first segment the label appears on
     while (anchorDistance > -labelLength / 2) {
-        index--;
-
         // there isn't enough room for the label after the beginning of the line
-        if (index < 0) return false;
+        if (index == 0u) return false;
 
+        index--;
         anchorDistance -= util::dist<float>(line[index], p);
         p = line[index];
     }
@@ -43,7 +47,7 @@ bool checkMaxAngle(const std::vector<Coordinate> &line, Anchor &anchor, const fl
     while (anchorDistance < labelLength / 2) {
 
         // there isn't enough room for the label before the end of the line
-        if (index + 1 >= (int)line.size()) return false;
+        if (index + 1 >= line.size()) return false;
 
         auto& prev = line[index - 1];
         auto& current = line[index];
@@ -71,8 +75,6 @@ bool checkMaxAngle(const std::vector<Coordinate> &line, Anchor &anchor, const fl
 
     // no part of the line had an angle greater than the maximum allowed. check passes.
     return true;
-
-
 }
 
 } // namespace mbgl

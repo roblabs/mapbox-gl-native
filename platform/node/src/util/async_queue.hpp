@@ -2,17 +2,12 @@
 
 #include <uv.h>
 
-#include <thread>
-#include <mutex>
 #include <functional>
+#include <mutex>
 #include <queue>
 #include <string>
-
-#if UV_VERSION_MAJOR == 0 && UV_VERSION_MINOR <= 10
-#define UV_ASYNC_PARAMS(handle) uv_async_t *handle, int
-#else
-#define UV_ASYNC_PARAMS(handle) uv_async_t *handle
-#endif
+#include <thread>
+#include <utility>
 
 namespace node_mbgl {
 namespace util {
@@ -20,14 +15,14 @@ namespace util {
 template <typename T>
 class AsyncQueue {
 public:
-    AsyncQueue(uv_loop_t *loop, std::function<void(T &)> fn) :
-          callback(fn) {
+    AsyncQueue(uv_loop_t *loop, std::function<void(T &)> fn) : callback(std::move(fn)) {
         async.data = this;
-        uv_async_init(loop, &async, [](UV_ASYNC_PARAMS(handle)) {
+        uv_async_init(loop, &async, [](uv_async_t* handle) {
             auto q = reinterpret_cast<AsyncQueue *>(handle->data);
             q->process();
         });
     }
+    ~AsyncQueue() = default;
 
     void send(T &&data) {
         {
@@ -46,23 +41,15 @@ public:
     }
 
     void stop() {
-        uv_close((uv_handle_t *)&async, [](uv_handle_t *handle) {
-            delete reinterpret_cast<AsyncQueue *>(handle->data);
-        });
+        uv_close(reinterpret_cast<uv_handle_t *>(&async),
+                 [](uv_handle_t *handle) { delete reinterpret_cast<AsyncQueue *>(handle->data); });
     }
 
-    void ref() {
-        uv_ref((uv_handle_t *)&async);
-    }
+    void ref() { uv_ref(reinterpret_cast<uv_handle_t *>(&async)); }
 
-    void unref() {
-        uv_unref((uv_handle_t *)&async);
-    }
+    void unref() { uv_unref(reinterpret_cast<uv_handle_t *>(&async)); }
 
 private:
-    ~AsyncQueue() {
-    }
-
     void process() {
         std::unique_ptr<T> item;
         while (true) {
@@ -85,5 +72,5 @@ private:
     std::function<void(T &)> callback;
 };
 
-}
-}
+} // namespace util
+} // namespace node_mbgl

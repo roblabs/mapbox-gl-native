@@ -1,41 +1,25 @@
-#ifndef MBGL_SPRITE_PARSER
-#define MBGL_SPRITE_PARSER
+#pragma once
 
-#include <mapbox/variant.hpp>
+#include <mbgl/style/image.hpp>
 
-#include <mbgl/util/image.hpp>
-#include <mbgl/util/noncopyable.hpp>
-#include <mbgl/util/geo.hpp>
-
-#include <string>
 #include <memory>
-#include <map>
 
 namespace mbgl {
 
-class SpriteImage;
-
-using SpriteImagePtr = std::shared_ptr<const SpriteImage>;
-
 // Extracts an individual image from a spritesheet from the given location.
-SpriteImagePtr createSpriteImage(const PremultipliedImage&,
-                                 uint16_t srcX,
-                                 uint16_t srcY,
-                                 uint16_t srcWidth,
-                                 uint16_t srcHeight,
-                                 double ratio,
-                                 bool sdf);
-
-using Sprites = std::map<std::string, SpriteImagePtr>;
-
-
-using SpriteParseResult = mapbox::util::variant<
-    Sprites,             // success
-    std::exception_ptr>; // error
+std::unique_ptr<style::Image> createStyleImage(const std::string& id,
+                                               const PremultipliedImage&,
+                                               int32_t srcX,
+                                               int32_t srcY,
+                                               int32_t srcWidth,
+                                               int32_t srcHeight,
+                                               double ratio,
+                                               bool sdf,
+                                               style::ImageStretches&& stretchX = {},
+                                               style::ImageStretches&& stretchY = {},
+                                               const optional<style::ImageContent>& content = nullopt);
 
 // Parses an image and an associated JSON file and returns the sprite objects.
-SpriteParseResult parseSprite(const std::string& image, const std::string& json);
+std::vector<Immutable<style::Image::Impl>> parseSprite(const std::string& image, const std::string& json);
 
 } // namespace mbgl
-
-#endif
