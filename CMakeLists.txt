@@ -953,6 +953,7 @@ set_source_files_properties(
 target_include_directories(
     mbgl-core
     PRIVATE ${PROJECT_SOURCE_DIR}/src
+            ${PROJECT_SOURCE_DIR}/platform/ios/WebP.framework/Headers
 )
 
 target_include_directories(

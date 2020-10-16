@@ -26,7 +26,7 @@ if(MBGL_WITH_OPENGL)
     )
     target_link_libraries(
         mbgl-core
-        PRIVATE "-framework GLKit" "-framework OpenGLES"
+        PRIVATE "-framework GLKit" "-framework OpenGLES" "-framework WebP"
     )
 endif()
 
@@ -68,6 +68,7 @@ target_sources(
         ${PROJECT_SOURCE_DIR}/platform/default/src/mbgl/util/png_writer.cpp
         ${PROJECT_SOURCE_DIR}/platform/default/src/mbgl/util/thread_local.cpp
         ${PROJECT_SOURCE_DIR}/platform/default/src/mbgl/util/utf.cpp
+        ${PROJECT_SOURCE_DIR}/platform/default/src/mbgl/util/webp_reader.cpp
 )
 
 target_include_directories(
